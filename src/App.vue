@@ -732,7 +732,7 @@ onBeforeUnmount(() => {
         >
           ☾
         </button>
-        <small class="moon-whisper">月亮也藏着小秘密</small>
+        <small class="moon-whisper">1，2，3，4，5 · 月光里，也许藏着一点秘密</small>
         <div class="topbar-center"><span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span></div>
         <button
           class="icon-button sound-button"
