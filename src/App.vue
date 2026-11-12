@@ -3,6 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { gsap } from "gsap";
 import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
+import { createFireworks } from "./fireworks";
+import {
+  countPlacedTiles,
+  createScrambledPuzzle,
+  isPuzzleSolved,
+  swapPuzzleTiles,
+} from "./puzzle";
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "love";
 const stage = ref("cover");
@@ -17,6 +24,12 @@ const holdProgress = ref(0);
 const candleOut = ref(false);
 const warpActive = ref(false);
 const warpCanvas = ref(null);
+const fireworksActive = ref(false);
+const fireworksCanvas = ref(null);
+const heartOpen = ref(false);
+const puzzleTiles = ref(createScrambledPuzzle());
+const selectedTile = ref(null);
+const puzzleSolved = ref(false);
 const photoIndex = ref(0);
 const photoBusy = ref(false);
 const photos = [
@@ -37,10 +50,11 @@ const photos = [
   },
 ];
 const starCanvas = ref(null);
-const stageOrder = ["main", "letter", "cake"];
+const stageOrder = ["main", "letter", "puzzle", "cake"];
 const letter =
   "亲爱的你：\n\n愿今天的风轻一点，星光亮一点；\n愿每一个平凡的日子，都藏着让你微笑的惊喜。\n\n新的一岁，继续勇敢地喜欢这个世界，\n也记得好好喜欢自己。\n\n生日快乐。今晚，所有的星星都为你闪耀。";
 const currentStep = computed(() => stageOrder.indexOf(stage.value));
+const placedCount = computed(() => countPlacedTiles(puzzleTiles.value));
 
 let renderer,
   scene,
@@ -61,12 +75,18 @@ let touchY = 0,
   blowFrames = 0;
 let photoTouchX = 0;
 let warpEffect = null;
+let fireworksEffect = null;
+let heartTimer = null;
 const notes = [
   392, 440, 523.25, 440, 349.23, 392, 440, 392, 329.63, 349.23, 392, 329.63,
 ];
 
 async function initStars() {
-  if (!starCanvas.value || renderer || SECRET) return;
+  if (!starCanvas.value || SECRET) return;
+  if (renderer) {
+    if (!frame && !document.hidden) animateStars();
+    return;
+  }
   try {
     const {
       AdditiveBlending,
@@ -264,6 +284,8 @@ function goStage(next) {
   if (
     photoOpen.value ||
     warpActive.value ||
+    heartOpen.value ||
+    fireworksActive.value ||
     stage.value === next ||
     !opened.value ||
     (candleOut.value && next !== "ending")
@@ -272,6 +294,11 @@ function goStage(next) {
   if (next === "ending") return;
   stopHold();
   stopMicrophone();
+  if (stage.value === "cake" && next === "puzzle") {
+    puzzleSolved.value = false;
+    selectedTile.value = null;
+    puzzleTiles.value = createScrambledPuzzle();
+  }
   stage.value = next;
   if (next === "letter") {
     typedText.value = "";
@@ -284,6 +311,72 @@ function goStage(next) {
       { opacity: 1, y: 0, duration: 0.65, ease: "power2.out" },
     ),
   );
+}
+
+function restartExperience() {
+  heartTimer?.kill();
+  warpEffect?.destroy();
+  fireworksEffect?.destroy();
+  warpEffect = null;
+  fireworksEffect = null;
+  confetti.reset();
+  stopHold();
+  stopMicrophone();
+  cancelAnimationFrame(typingFrame);
+  cancelAnimationFrame(musicFrame);
+  cancelAnimationFrame(frame);
+  typingFrame = 0;
+  musicFrame = 0;
+  frame = 0;
+  audioContext?.suspend();
+  stage.value = "cover";
+  opened.value = false;
+  isOpening.value = false;
+  warpActive.value = false;
+  fireworksActive.value = false;
+  heartOpen.value = false;
+  candleOut.value = false;
+  micState.value = "idle";
+  holdProgress.value = 0;
+  typedText.value = "";
+  moonTaps.value = 0;
+  photoOpen.value = false;
+  puzzleSolved.value = false;
+  selectedTile.value = null;
+  puzzleTiles.value = createScrambledPuzzle();
+}
+
+function resetPuzzle() {
+  if (puzzleSolved.value || heartOpen.value) return;
+  selectedTile.value = null;
+  puzzleTiles.value = createScrambledPuzzle();
+}
+
+function tapPuzzle(position) {
+  if (puzzleSolved.value || heartOpen.value || stage.value !== "puzzle") return;
+  if (selectedTile.value === null) {
+    selectedTile.value = position;
+    return;
+  }
+  if (selectedTile.value === position) {
+    selectedTile.value = null;
+    return;
+  }
+  puzzleTiles.value = swapPuzzleTiles(
+    puzzleTiles.value,
+    selectedTile.value,
+    position,
+  );
+  selectedTile.value = null;
+  if (isPuzzleSolved(puzzleTiles.value)) {
+    puzzleSolved.value = true;
+    heartOpen.value = true;
+    heartTimer?.kill();
+    heartTimer = gsap.delayedCall(5, () => {
+      heartOpen.value = false;
+      goStage("cake");
+    });
+  }
 }
 
 function startTyping() {
@@ -308,13 +401,15 @@ function onTouchEnd(event) {
     !opened.value ||
     photoOpen.value ||
     warpActive.value ||
+    heartOpen.value ||
+    fireworksActive.value ||
     stage.value === "ending"
   )
     return;
   const dy = (event.changedTouches[0]?.clientY || 0) - touchY;
   if (Math.abs(dy) < 65) return;
   const index = stageOrder.indexOf(stage.value);
-  if (dy < 0 && index < 2) goStage(stageOrder[index + 1]);
+  if (dy < 0 && index < stageOrder.length - 1) goStage(stageOrder[index + 1]);
   if (dy > 0 && index > 0) goStage(stageOrder[index - 1]);
 }
 
@@ -499,7 +594,8 @@ function celebrate() {
       particleCount: count,
       spread: 95,
       startVelocity: 48,
-      gravity: 0.9,
+      gravity: 1.15,
+      ticks: 90,
       origin: { x, y },
       colors,
       disableForReducedMotion: true,
@@ -513,18 +609,43 @@ function celebrate() {
       spread: 110,
       origin: { y: 0.65 },
       colors,
+      gravity: 1.15,
+      ticks: 90,
       disableForReducedMotion: true,
     }),
   );
-  gsap.delayedCall(3, () => {
-    stage.value = "ending";
+  gsap.delayedCall(3.3, startFinaleFireworks);
+}
+
+async function startFinaleFireworks() {
+  confetti.reset();
+  stage.value = "ending";
+  fireworksActive.value = true;
+  await nextTick();
+  if (!fireworksCanvas.value) {
+    fireworksActive.value = false;
+    return;
+  }
+  fireworksEffect = createFireworks(fireworksCanvas.value, () => {
+    fireworksEffect?.destroy();
+    fireworksEffect = null;
+    fireworksActive.value = false;
+    nextTick(() =>
+      gsap.fromTo(
+        ".ending-content",
+        { opacity: 0, y: 28 },
+        { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" },
+      ),
+    );
   });
+  if (!document.hidden) fireworksEffect.start();
 }
 
 function onVisibility() {
   document.documentElement.classList.toggle("page-hidden", document.hidden);
   if (document.hidden) {
     warpEffect?.pause();
+    fireworksEffect?.pause();
     gsap.globalTimeline.pause();
     confetti.reset();
     stopHold();
@@ -540,8 +661,9 @@ function onVisibility() {
     if (micState.value === "listening") stopMicrophone();
   } else {
     warpEffect?.resume();
+    fireworksEffect?.resume();
     gsap.globalTimeline.resume();
-    if (renderer && !frame) animateStars();
+    if (renderer && !frame && stage.value !== "cover") animateStars();
     if (stage.value === "letter" && typedText.value.length < letter.length)
       startTyping();
     if (soundOn.value && opened.value) startMusic();
@@ -554,6 +676,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   warpEffect?.destroy();
+  fireworksEffect?.destroy();
+  heartTimer?.kill();
   cancelAnimationFrame(frame);
   cancelAnimationFrame(typingFrame);
   cancelAnimationFrame(holdFrame);
@@ -603,12 +727,12 @@ onBeforeUnmount(() => {
         <button
           class="icon-button moon-button"
           type="button"
-          aria-label="点击五次查看隐藏照片"
+          aria-label="小月亮，轻点看看"
           @click="tapMoon"
         >
           ☾
         </button>
-        <span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span>
+        <div class="topbar-center"><span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span><small class="moon-whisper">月光里，也许藏着一点秘密</small></div>
         <button
           class="icon-button sound-button"
           type="button"
@@ -648,7 +772,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="cover-bottom">
-          <span>01 / 04</span><span>轻触，开启这场小小的宇宙漫游</span>
+          <span>01 / 05</span><span>轻触，开启这场小小的宇宙漫游</span>
         </div>
       </section>
 
@@ -688,7 +812,7 @@ onBeforeUnmount(() => {
             <i v-for="n in 12" :key="n" :style="{ '--i': n }"></i>
           </div>
           <div class="stage-content letter-content">
-            <div class="section-number">02 <span>/</span> 04</div>
+            <div class="section-number">02 <span>/</span> 05</div>
             <span class="section-kicker">A LETTER JUST FOR YOU</span>
             <h2>写给<span>今天的你</span></h2>
             <div class="letter-paper">
@@ -706,17 +830,62 @@ onBeforeUnmount(() => {
             <button
               class="pill-button letter-next"
               type="button"
-              @click="goStage('cake')"
+              @click="goStage('puzzle')"
             >
-              去许一个愿望 <span>↗</span>
+              拼出一份惊喜 <span>↗</span>
             </button>
             <p class="swipe-small">继续上滑也可以哦 ↑</p>
           </div>
         </section>
 
+        <section v-if="stage === 'puzzle'" class="scene-page puzzle-page">
+          <div class="stage-content puzzle-content">
+            <div class="section-number">11 <span>/</span> 12</div>
+            <span class="section-kicker">A LITTLE PIECE OF LOVE</span>
+            <h2>把惊喜<span>拼完整</span></h2>
+            <p class="puzzle-intro">
+              轻点两块碎片交换位置，<br />拼好后有彩蛋！
+            </p>
+            <div class="puzzle-reference">
+              <img
+                src="/birthday-photo-2.webp"
+                loading="lazy"
+                alt="拼图完成参考图"
+              /><span>参考图</span>
+            </div>
+            <div class="puzzle-grid" role="group" aria-label="九块生日照片拼图">
+              <button
+                v-for="(piece, position) in puzzleTiles"
+                :key="position"
+                class="puzzle-tile"
+                :class="{
+                  selected: selectedTile === position,
+                  placed: piece === position,
+                }"
+                :style="{
+                  backgroundPosition: `${(piece % 3) * 50}% ${Math.floor(piece / 3) * 50}%`,
+                }"
+                type="button"
+                :aria-label="`第 ${position + 1} 格，拼图碎片`"
+                :aria-pressed="selectedTile === position"
+                @click="tapPuzzle(position)"
+              ></button>
+            </div>
+            <div class="puzzle-bottom">
+              <span
+                >已归位 <b>{{ placedCount }}</b> / 9</span
+              ><button type="button" @click="resetPuzzle">重新打乱 ↻</button>
+            </div>
+            <p class="puzzle-hint">选中一块，再点另一块交换</p>
+            <button class="puzzle-next" type="button" @click="goStage('cake')">
+              下一步 · 去许愿 <span>↗</span>
+            </button>
+          </div>
+        </section>
+
         <section v-if="stage === 'cake'" class="scene-page cake-page">
           <div class="stage-content cake-content">
-            <div class="section-number">03 <span>/</span> 04</div>
+            <div class="section-number">04 <span>/</span> 05</div>
             <span class="section-kicker">MAKE A WISH</span>
             <h2>许个愿吧，<br /><em>今天你是主角。</em></h2>
             <p class="cake-intro">
@@ -793,6 +962,7 @@ onBeforeUnmount(() => {
             <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
             <div class="ending-line"></div>
             <span class="ending-love">生日快乐，亲爱的你 ♡</span>
+            <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
           </div>
           <footer>Made with <span>❤️</span> by Lay</footer>
         </section>
@@ -805,6 +975,48 @@ onBeforeUnmount(() => {
           ></span>
         </nav>
       </template>
+
+      <div
+        v-if="heartOpen"
+        class="heart-overlay"
+        role="status"
+        aria-live="polite"
+        @touchstart.stop
+        @touchend.stop
+      >
+        <span class="heart-kicker">YOU FOUND IT</span>
+        <div class="beating-heart" aria-hidden="true">♥</div>
+        <svg class="ecg" viewBox="0 0 360 100" aria-hidden="true">
+          <path
+            class="ecg-base"
+            d="M0 50 H78 L93 50 L105 31 L119 73 L133 12 L147 50 H360"
+          />
+          <path
+            class="ecg-pulse"
+            d="M0 50 H78 L93 50 L105 31 L119 73 L133 12 L147 50 H360"
+          />
+        </svg>
+        <strong>你拼好了我的心</strong><small>下一站，去许一个愿望</small>
+      </div>
+
+      <div
+        v-if="fireworksActive"
+        class="fireworks-overlay"
+        role="status"
+        aria-live="polite"
+        @touchstart.stop
+        @touchend.stop
+      >
+        <canvas
+          ref="fireworksCanvas"
+          class="fireworks-canvas"
+          aria-hidden="true"
+        ></canvas>
+        <div class="fireworks-copy">
+          <span>✦ &nbsp; WISHES IN THE SKY &nbsp; ✦</span
+          ><strong>把愿望交给夜空</strong>
+        </div>
+      </div>
 
       <div
         v-if="warpActive"
