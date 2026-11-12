@@ -153,19 +153,29 @@ async function requestOrientation() {
 }
 
 async function startWarp() {
-  if (!opened.value || warpActive.value || document.hidden) return;
+  if (!opened.value || warpActive.value) return;
   warpActive.value = true;
   await nextTick();
   if (!warpCanvas.value) {
     warpActive.value = false;
     return;
   }
+  gsap.set(".main-title", { opacity: 0, scale: 0.72, y: 20 });
   warpEffect = createWarpField(warpCanvas.value, () => {
     warpEffect?.destroy();
     warpEffect = null;
     warpActive.value = false;
+    nextTick(() =>
+      gsap.to(".main-title", {
+        opacity: 1,
+        scale: 1,
+        y: 0,
+        duration: 1.2,
+        ease: "back.out(1.5)",
+      }),
+    );
   });
-  warpEffect.start();
+  if (!document.hidden) warpEffect.start();
 }
 
 function onOrientation(event) {
@@ -227,13 +237,9 @@ async function openEnvelope() {
       onComplete: async () => {
         opened.value = true;
         stage.value = "main";
+        startWarp();
         await nextTick();
         initStars();
-        gsap.fromTo(
-          ".main-title",
-          { opacity: 0, scale: 0.72, y: 20 },
-          { opacity: 1, scale: 1, y: 0, duration: 1.2, ease: "back.out(1.5)" },
-        );
       },
     })
     .to(".envelope", { y: -28, scale: 1.08, duration: 0.4, ease: "power2.out" })
@@ -673,9 +679,6 @@ onBeforeUnmount(() => {
               @click="goStage('letter')"
             >
               <span>向上滑动，拆开祝福信</span><b>⌃</b>
-            </button>
-            <button class="universe-entry" type="button" @click="startWarp">
-              <span>✦</span> 开启小宇宙 <span>✦</span>
             </button>
           </div>
         </section>
