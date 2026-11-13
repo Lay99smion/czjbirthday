@@ -14,6 +14,7 @@ import {
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "love";
 const birthdayName = "陈照敬";
+const birthdayDate = "1月10日";
 const birthdayMusic = createBirthdayMusic();
 const stage = ref("cover");
 const opened = ref(false);
@@ -709,7 +710,7 @@ onBeforeUnmount(() => {
         <div class="cover-stars" aria-hidden="true">✦ <span>✧</span> ✦</div>
         <div class="cover-content">
           <div class="cover-kicker">
-            <span class="line"></span> 写给{{ birthdayName }}的生日信
+            <span class="line"></span> {{ birthdayDate }} · 写给{{ birthdayName }}的生日信
             <span class="line"></span>
           </div>
           <h1>今晚，<br /><em>有一束光</em>为你亮起</h1>
@@ -742,7 +743,7 @@ onBeforeUnmount(() => {
         <section v-if="stage === 'main'" class="scene-page main-page">
           <div class="stage-content main-content">
             <div class="tiny-label">
-              ✦ &nbsp; THE STARS ARE YOURS TONIGHT &nbsp; ✦
+              ✦ &nbsp; {{ birthdayDate }} · 今夜星光为你闪耀 &nbsp; ✦
             </div>
             <div class="birthday-halo">
               <span class="halo-ring ring-one"></span
@@ -779,7 +780,7 @@ onBeforeUnmount(() => {
             <h2>写给<span>{{ birthdayName }}</span></h2>
             <div class="letter-paper">
               <div class="letter-paper-top">
-                <span>✦</span><span>DEAR YOU</span><span>✦</span>
+                <span class="letter-date">{{ birthdayDate }}</span><span>DEAR {{ birthdayName }}</span><span>✦</span>
               </div>
               <p class="typewriter">
                 {{ typedText

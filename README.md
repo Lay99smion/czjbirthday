@@ -13,7 +13,7 @@ npm run dev
 
 ## 自定义
 
-- 在 `src/App.vue` 修改 `birthdayName`、`letter` 祝福信文案、各场景标题，以及结尾署名。
+- 本次祝福对象为陈照敬，生日为 1月10日。在 `src/App.vue` 修改 `birthdayName`、`birthdayDate`、`letter` 祝福信文案、各场景标题，以及结尾署名。
 - 相册使用 `public/pic1.webp`、`pic2.webp`、`pic3.webp`，由提供的三张同名 JPG 压缩而来；拼图使用第二张。原始 JPG 保留在本地 `assets/originals/`，不随站点发布。
 - 在 `src/App.vue` 的 `photos` 数组里增减照片及其说明文字。将照片放进 `public/`，按数组里的 `src` 填写路径。
 - 照片建议保留 3:4 竖幅、WebP 格式，每张小于 200KB。相册支持左右滑动、点按照片和左右箭头翻页。
