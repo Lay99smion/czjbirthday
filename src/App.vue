@@ -4,6 +4,7 @@ import { gsap } from "gsap";
 import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
 import { createFireworks } from "./fireworks";
+import { createBirthdayMusic } from "./birthdayMusic";
 import {
   countPlacedTiles,
   createScrambledPuzzle,
@@ -12,6 +13,8 @@ import {
 } from "./puzzle";
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "love";
+const birthdayName = "陈照敬";
+const birthdayMusic = createBirthdayMusic();
 const stage = ref("cover");
 const opened = ref(false);
 const isOpening = ref(false);
@@ -34,25 +37,25 @@ const photoIndex = ref(0);
 const photoBusy = ref(false);
 const photos = [
   {
-    src: "/birthday-photo.webp",
-    alt: "窗边烛光与纸星星",
+    src: "/pic1.webp",
+    alt: "生日相册照片一",
     caption: "把这一刻，悄悄收藏。 ♡",
   },
   {
-    src: "/birthday-photo-2.webp",
-    alt: "夜色里的生日礼物",
+    src: "/pic2.webp",
+    alt: "生日相册照片二",
     caption: "所有惊喜，都想与你分享。 ✦",
   },
   {
-    src: "/birthday-photo-3.webp",
-    alt: "有星星装饰的生日蛋糕",
+    src: "/pic3.webp",
+    alt: "生日相册照片三",
     caption: "甜甜的愿望，正在实现。 ♡",
   },
 ];
 const starCanvas = ref(null);
 const stageOrder = ["main", "letter", "puzzle", "cake"];
 const letter =
-  "亲爱的你：\n\n愿今天的风轻一点，星光亮一点；\n愿每一个平凡的日子，都藏着让你微笑的惊喜。\n\n新的一岁，继续勇敢地喜欢这个世界，\n也记得好好喜欢自己。\n\n生日快乐。今晚，所有的星星都为你闪耀。";
+  `亲爱的${birthdayName}：\n\n愿今天的风轻一点，星光亮一点；\n愿每一个平凡的日子，都藏着让你微笑的惊喜。\n\n新的一岁，继续勇敢地喜欢这个世界，\n也记得好好喜欢自己。\n\n生日快乐，${birthdayName}。今晚，所有的星星都为你闪耀。`;
 const currentStep = computed(() => stageOrder.indexOf(stage.value));
 const placedCount = computed(() => countPlacedTiles(puzzleTiles.value));
 
@@ -63,13 +66,10 @@ let renderer,
   frame = 0;
 let typingFrame = 0,
   holdFrame = 0,
-  micFrame = 0,
-  musicFrame = 0;
-let audioContext, micContext, micStream, micSource, analyser;
+  micFrame = 0;
+let micContext, micStream, micSource, analyser;
 let tiltX = 0,
-  tiltY = 0,
-  lastNoteAt = 0,
-  noteIndex = 0;
+  tiltY = 0;
 let touchY = 0,
   holdStarted = 0,
   blowFrames = 0;
@@ -77,9 +77,6 @@ let photoTouchX = 0;
 let warpEffect = null;
 let fireworksEffect = null;
 let heartTimer = null;
-const notes = [
-  392, 440, 523.25, 440, 349.23, 392, 440, 392, 329.63, 349.23, 392, 329.63,
-];
 
 async function initStars() {
   if (!starCanvas.value || SECRET) return;
@@ -203,48 +200,17 @@ function onOrientation(event) {
   tiltY = Math.max(-1, Math.min(1, (event.beta || 0) / 50));
 }
 
-function playTone(frequency, when) {
-  if (!audioContext) return;
-  const osc = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(frequency, when);
-  gain.gain.setValueAtTime(0.0001, when);
-  gain.gain.exponentialRampToValueAtTime(0.025, when + 0.045);
-  gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.65);
-  osc.connect(gain).connect(audioContext.destination);
-  osc.start(when);
-  osc.stop(when + 0.7);
-}
-
-function musicLoop() {
-  if (!audioContext || document.hidden || !soundOn.value) return;
-  musicFrame = requestAnimationFrame(musicLoop);
-  if (audioContext.currentTime - lastNoteAt > 0.48) {
-    lastNoteAt = audioContext.currentTime;
-    playTone(notes[noteIndex++ % notes.length], lastNoteAt);
-  }
-}
-
 function startMusic() {
   if (!soundOn.value || document.hidden) return;
-  try {
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-    audioContext.resume();
-    if (!musicFrame) musicLoop();
-  } catch {
+  birthdayMusic.start().catch(() => {
     soundOn.value = false;
-  }
+  });
 }
 
 function toggleMusic() {
   soundOn.value = !soundOn.value;
   if (soundOn.value) startMusic();
-  else {
-    cancelAnimationFrame(musicFrame);
-    musicFrame = 0;
-    audioContext?.suspend();
-  }
+  else birthdayMusic.pause();
 }
 
 async function openEnvelope() {
@@ -323,12 +289,10 @@ function restartExperience() {
   stopHold();
   stopMicrophone();
   cancelAnimationFrame(typingFrame);
-  cancelAnimationFrame(musicFrame);
   cancelAnimationFrame(frame);
   typingFrame = 0;
-  musicFrame = 0;
   frame = 0;
-  audioContext?.suspend();
+  birthdayMusic.reset();
   stage.value = "cover";
   opened.value = false;
   isOpening.value = false;
@@ -653,11 +617,9 @@ function onVisibility() {
     frame = 0;
     cancelAnimationFrame(typingFrame);
     typingFrame = 0;
-    cancelAnimationFrame(musicFrame);
-    musicFrame = 0;
     cancelAnimationFrame(micFrame);
     micFrame = 0;
-    audioContext?.suspend();
+    birthdayMusic.pause();
     if (micState.value === "listening") stopMicrophone();
   } else {
     warpEffect?.resume();
@@ -681,7 +643,6 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(frame);
   cancelAnimationFrame(typingFrame);
   cancelAnimationFrame(holdFrame);
-  cancelAnimationFrame(musicFrame);
   stopMicrophone();
   window.removeEventListener("resize", resizeStars);
   window.removeEventListener("deviceorientation", onOrientation);
@@ -689,7 +650,7 @@ onBeforeUnmount(() => {
   stars?.geometry.dispose();
   stars?.material.dispose();
   renderer?.dispose();
-  audioContext?.close();
+  birthdayMusic.dispose();
 });
 </script>
 
@@ -709,7 +670,7 @@ onBeforeUnmount(() => {
         <div class="secret-heart">♥</div>
         <h1>你是我藏在<br />星光里的秘密</h1>
         <p>
-          如果今天的愿望有回音，<br />那一定是宇宙也在轻轻说：<br />很高兴，你来到这个世界。
+          如果今天的愿望有回音，<br />那一定是宇宙也在轻轻说：<br />{{ birthdayName }}，很高兴你来到这个世界。
         </p>
         <div class="secret-divider">✦ &nbsp; ✦ &nbsp; ✦</div>
         <a href="/" class="pill-button">返回生日夜空 <span>↗</span></a>
@@ -748,19 +709,19 @@ onBeforeUnmount(() => {
         <div class="cover-stars" aria-hidden="true">✦ <span>✧</span> ✦</div>
         <div class="cover-content">
           <div class="cover-kicker">
-            <span class="line"></span> 一封来自星星的信
+            <span class="line"></span> 写给{{ birthdayName }}的生日信
             <span class="line"></span>
           </div>
           <h1>今晚，<br /><em>有一束光</em>为你亮起</h1>
-          <p class="cover-subtitle">把这份小小的惊喜，送给特别的你</p>
+          <p class="cover-subtitle">{{ birthdayName }}，把这份小小的惊喜送给你</p>
           <button
             class="envelope-wrap"
             type="button"
-            aria-label="点击打开生日祝福"
+            :aria-label="`点击打开送给${birthdayName}的生日祝福`"
             @click="openEnvelope"
           >
             <span class="envelope-glow"></span>
-            <span class="envelope-letter"><span>TO YOU</span><b>♡</b></span>
+            <span class="envelope-letter"><span>TO {{ birthdayName }}</span><b>♡</b></span>
             <span class="envelope"
               ><span class="envelope-back"></span
               ><span class="envelope-flap"></span
@@ -790,7 +751,7 @@ onBeforeUnmount(() => {
               ><span class="halo-spark spark-two">✧</span
               ><span class="halo-spark spark-three">✦</span>
               <div class="main-title">
-                <small>HAPPY BIRTHDAY</small>
+                <small>{{ birthdayName }} · HAPPY BIRTHDAY</small>
                 <h2>生日<br /><em>快乐</em></h2>
                 <div class="title-star">✦</div>
               </div>
@@ -815,7 +776,7 @@ onBeforeUnmount(() => {
           <div class="stage-content letter-content">
             <div class="section-number">02 <span>/</span> 05</div>
             <span class="section-kicker">A LETTER JUST FOR YOU</span>
-            <h2>写给<span>今天的你</span></h2>
+            <h2>写给<span>{{ birthdayName }}</span></h2>
             <div class="letter-paper">
               <div class="letter-paper-top">
                 <span>✦</span><span>DEAR YOU</span><span>✦</span>
@@ -849,7 +810,7 @@ onBeforeUnmount(() => {
             </p>
             <div class="puzzle-reference">
               <img
-                src="/birthday-photo-2.webp"
+                src="/pic2.webp"
                 loading="lazy"
                 alt="拼图完成参考图"
               /><span>参考图</span>
@@ -962,7 +923,7 @@ onBeforeUnmount(() => {
             <h2>愿你的每一天，<br /><em>都闪闪发光。</em></h2>
             <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
             <div class="ending-line"></div>
-            <span class="ending-love">生日快乐，亲爱的你 ♡</span>
+            <span class="ending-love">生日快乐，{{ birthdayName }} ♡</span>
             <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
           </div>
           <footer>Made with <span>❤️</span> by Lay</footer>
@@ -1036,7 +997,7 @@ onBeforeUnmount(() => {
         <div class="warp-portal" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="warp-copy">
           <span>✦ &nbsp; A LITTLE UNIVERSE &nbsp; ✦</span
-          ><strong>正在穿越<br />你的生日宇宙</strong
+          ><strong>正在穿越<br />{{ birthdayName }}的生日宇宙</strong
           ><small>愿望已经出发</small>
         </div>
         <div class="warp-progress" aria-hidden="true"><i></i></div>
