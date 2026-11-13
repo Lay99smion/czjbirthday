@@ -997,7 +997,7 @@ onBeforeUnmount(() => {
             d="M0 50 H78 L93 50 L105 31 L119 73 L133 12 L147 50 H360"
           />
         </svg>
-        <strong>你拼好了我的心</strong><small>下一站，去许一个愿望</small>
+        <strong>祝你保持一颗炽热的心</strong><small>下一站，去许一个愿望</small>
       </div>
 
       <div
