@@ -735,7 +735,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="cover-bottom">
-          <span>01 / 05</span><span>轻触，开启这场小小的宇宙漫游</span>
+          <span>轻触，开启这场小小的宇宙漫游</span>
         </div>
       </section>
 
@@ -775,7 +775,6 @@ onBeforeUnmount(() => {
             <i v-for="n in 12" :key="n" :style="{ '--i': n }"></i>
           </div>
           <div class="stage-content letter-content">
-            <div class="section-number">02 <span>/</span> 05</div>
             <span class="section-kicker">A LETTER JUST FOR YOU</span>
             <h2>写给<span>{{ birthdayName }}</span></h2>
             <div class="letter-paper">
@@ -803,7 +802,6 @@ onBeforeUnmount(() => {
 
         <section v-if="stage === 'puzzle'" class="scene-page puzzle-page">
           <div class="stage-content puzzle-content">
-            <div class="section-number">11 <span>/</span> 12</div>
             <span class="section-kicker">A LITTLE PIECE OF LOVE</span>
             <h2>把惊喜<span>拼完整</span></h2>
             <p class="puzzle-intro">
@@ -848,7 +846,6 @@ onBeforeUnmount(() => {
 
         <section v-if="stage === 'cake'" class="scene-page cake-page">
           <div class="stage-content cake-content">
-            <div class="section-number">04 <span>/</span> 05</div>
             <span class="section-kicker">MAKE A WISH</span>
             <h2>许个愿吧，<br /><em>今天你是主角。</em></h2>
             <p class="cake-intro">
@@ -1038,8 +1035,7 @@ onBeforeUnmount(() => {
             ‹
           </button>
           <div class="album-count">
-            <span>{{ String(photoIndex + 1).padStart(2, "0") }}</span> /
-            {{ String(photos.length).padStart(2, "0") }}
+            第 <span>{{ photoIndex + 1 }}</span> 张 · 共 {{ photos.length }} 张
           </div>
           <button type="button" aria-label="下一张照片" @click="flipPhoto(1)">
             ›
