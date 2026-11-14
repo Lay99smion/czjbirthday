@@ -5,6 +5,12 @@ import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
 import { createFireworks } from "./fireworks";
 import { createBirthdayMusic } from "./birthdayMusic";
+import MemoryFilm from "./components/MemoryFilm.vue";
+import GiftLetter from "./components/GiftLetter.vue";
+import StarCollection from "./components/StarCollection.vue";
+import WishSky from "./components/WishSky.vue";
+import BirdLetter from "./components/BirdLetter.vue";
+import { albumPhotos as photos } from "./memories";
 import {
   countPlacedTiles,
   createScrambledPuzzle,
@@ -22,41 +28,26 @@ const isOpening = ref(false);
 const soundOn = ref(true);
 const photoOpen = ref(false);
 const moonTaps = ref(0);
-const typedText = ref("");
+const letterReady = ref(false);
+const smokeVisible = ref(false);
+const shell = ref(null);
 const micState = ref("idle");
 const holdProgress = ref(0);
 const candleOut = ref(false);
 const warpActive = ref(false);
+const warpLeaving = ref(false);
 const warpCanvas = ref(null);
 const fireworksActive = ref(false);
 const fireworksCanvas = ref(null);
 const heartOpen = ref(false);
+const secretLetterOpen = ref(false);
 const puzzleTiles = ref(createScrambledPuzzle());
 const selectedTile = ref(null);
 const puzzleSolved = ref(false);
 const photoIndex = ref(0);
 const photoBusy = ref(false);
-const photos = [
-  {
-    src: "/pic1.webp",
-    alt: "生日相册照片一",
-    caption: "把这一刻，悄悄收藏。 ♡",
-  },
-  {
-    src: "/pic2.webp",
-    alt: "生日相册照片二",
-    caption: "所有惊喜，都想与你分享。 ✦",
-  },
-  {
-    src: "/pic3.webp",
-    alt: "生日相册照片三",
-    caption: "甜甜的愿望，正在实现。 ♡",
-  },
-];
 const starCanvas = ref(null);
 const stageOrder = ["main", "letter", "puzzle", "cake"];
-const letter =
-  `亲爱的${birthdayName}：\n\n愿今天的风轻一点，星光亮一点；\n愿每一个平凡的日子，都藏着让你微笑的惊喜。\n\n新的一岁，继续勇敢地喜欢这个世界，\n也记得好好喜欢自己。\n\n生日快乐，${birthdayName}。今晚，所有的星星都为你闪耀。`;
 const currentStep = computed(() => stageOrder.indexOf(stage.value));
 const placedCount = computed(() => countPlacedTiles(puzzleTiles.value));
 
@@ -65,8 +56,7 @@ let renderer,
   camera,
   stars,
   frame = 0;
-let typingFrame = 0,
-  holdFrame = 0,
+let holdFrame = 0,
   micFrame = 0;
 let micContext, micStream, micSource, analyser;
 let tiltX = 0,
@@ -78,6 +68,37 @@ let photoTouchX = 0;
 let warpEffect = null;
 let fireworksEffect = null;
 let heartTimer = null;
+let secretReturnFocus = null;
+function openSecretLetter(input) {
+  if (secretLetterOpen.value) return;
+  secretReturnFocus = input;
+  secretLetterOpen.value = true;
+  playUiSound("star");
+}
+function restoreSecretFocus() {
+  secretReturnFocus?.focus({ preventScroll: true });
+  secretReturnFocus = null;
+}
+const celebrationCalls = new Set();
+function later(seconds, callback) {
+  const call = gsap.delayedCall(seconds, () => { celebrationCalls.delete(call); callback(); });
+  celebrationCalls.add(call);
+  return call;
+}
+function clearCelebration() { celebrationCalls.forEach(call => call.kill()); celebrationCalls.clear(); }
+function playUiSound(kind) { if (soundOn.value) birthdayMusic.effect(kind); }
+function onPointerMove(event) {
+  if (event.pointerType === "touch" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  tiltX = (event.clientX / innerWidth - .5) * 2;
+  tiltY = (event.clientY / innerHeight - .5) * 2;
+  shell.value?.style.setProperty("--px", `${tiltX * 7}px`);
+  shell.value?.style.setProperty("--py", `${tiltY * 5}px`);
+}
+function resetParallax() {
+  tiltX = 0; tiltY = 0;
+  shell.value?.style.setProperty("--px", "0px");
+  shell.value?.style.setProperty("--py", "0px");
+}
 
 async function initStars() {
   if (!starCanvas.value || SECRET) return;
@@ -176,22 +197,15 @@ async function startWarp() {
   await nextTick();
   if (!warpCanvas.value) {
     warpActive.value = false;
+    stage.value = "main";
     return;
   }
-  gsap.set(".main-title", { opacity: 0, scale: 0.72, y: 20 });
   warpEffect = createWarpField(warpCanvas.value, () => {
     warpEffect?.destroy();
     warpEffect = null;
+    warpLeaving.value = true;
+    stage.value = "main";
     warpActive.value = false;
-    nextTick(() =>
-      gsap.to(".main-title", {
-        opacity: 1,
-        scale: 1,
-        y: 0,
-        duration: 1.2,
-        ease: "back.out(1.5)",
-      }),
-    );
   });
   if (!document.hidden) warpEffect.start();
 }
@@ -199,6 +213,9 @@ async function startWarp() {
 function onOrientation(event) {
   tiltX = Math.max(-1, Math.min(1, (event.gamma || 0) / 35));
   tiltY = Math.max(-1, Math.min(1, (event.beta || 0) / 50));
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  shell.value?.style.setProperty("--px", `${tiltX * 7}px`);
+  shell.value?.style.setProperty("--py", `${tiltY * 5}px`);
 }
 
 function startMusic() {
@@ -223,7 +240,7 @@ async function openEnvelope() {
     .timeline({
       onComplete: async () => {
         opened.value = true;
-        stage.value = "main";
+        stage.value = "warp";
         startWarp();
         await nextTick();
         initStars();
@@ -251,11 +268,15 @@ function goStage(next) {
   if (
     photoOpen.value ||
     warpActive.value ||
+    warpLeaving.value ||
     heartOpen.value ||
     fireworksActive.value ||
     stage.value === next ||
     !opened.value ||
-    (candleOut.value && next !== "ending")
+    (stage.value === "main" && next !== "letter") ||
+    (stage.value === "letter" && !letterReady.value) ||
+    stage.value === "stars" ||
+    candleOut.value
   )
     return;
   if (next === "ending") return;
@@ -268,8 +289,7 @@ function goStage(next) {
   }
   stage.value = next;
   if (next === "letter") {
-    typedText.value = "";
-    startTyping();
+    letterReady.value = false;
   }
   nextTick(() =>
     gsap.fromTo(
@@ -282,6 +302,7 @@ function goStage(next) {
 
 function restartExperience() {
   heartTimer?.kill();
+  clearCelebration();
   warpEffect?.destroy();
   fireworksEffect?.destroy();
   warpEffect = null;
@@ -289,21 +310,23 @@ function restartExperience() {
   confetti.reset();
   stopHold();
   stopMicrophone();
-  cancelAnimationFrame(typingFrame);
   cancelAnimationFrame(frame);
-  typingFrame = 0;
   frame = 0;
   birthdayMusic.reset();
   stage.value = "cover";
   opened.value = false;
   isOpening.value = false;
   warpActive.value = false;
+  warpLeaving.value = false;
   fireworksActive.value = false;
   heartOpen.value = false;
+  secretLetterOpen.value = false;
+  secretReturnFocus = null;
   candleOut.value = false;
   micState.value = "idle";
   holdProgress.value = 0;
-  typedText.value = "";
+  letterReady.value = false;
+  smokeVisible.value = false;
   moonTaps.value = 0;
   photoOpen.value = false;
   puzzleSolved.value = false;
@@ -344,31 +367,18 @@ function tapPuzzle(position) {
   }
 }
 
-function startTyping() {
-  cancelAnimationFrame(typingFrame);
-  const existingCount = typedText.value.length;
-  let start = 0;
-  const tick = (time) => {
-    if (stage.value !== "letter" || document.hidden) return;
-    start ||= time - existingCount * 42;
-    const count = Math.min(letter.length, Math.floor((time - start) / 42));
-    typedText.value = letter.slice(0, count);
-    if (count < letter.length) typingFrame = requestAnimationFrame(tick);
-  };
-  typingFrame = requestAnimationFrame(tick);
-}
-
 function onTouchStart(event) {
   touchY = event.changedTouches[0]?.clientY || 0;
 }
 function onTouchEnd(event) {
   if (
+    event.target.closest?.(".letter-paper, .wish-form, .film-rail") ||
     !opened.value ||
     photoOpen.value ||
     warpActive.value ||
     heartOpen.value ||
     fireworksActive.value ||
-    stage.value === "ending"
+    ["ending", "stars", "main"].includes(stage.value)
   )
     return;
   const dy = (event.changedTouches[0]?.clientY || 0) - touchY;
@@ -549,7 +559,8 @@ function blowOut() {
     duration: 0.4,
     ease: "power2.out",
   });
-  gsap.delayedCall(0.45, celebrate);
+  smokeVisible.value = true;
+  later(2.7, () => { smokeVisible.value = false; celebrate(); });
 }
 
 function celebrate() {
@@ -566,9 +577,9 @@ function celebrate() {
       disableForReducedMotion: true,
     });
   fire(0.2, 0.38, 75);
-  gsap.delayedCall(0.35, () => fire(0.8, 0.33, 75));
-  gsap.delayedCall(0.8, () => fire(0.5, 0.24, 90));
-  gsap.delayedCall(1.4, () =>
+  later(0.35, () => fire(0.8, 0.33, 75));
+  later(0.8, () => fire(0.5, 0.24, 90));
+  later(1.4, () =>
     confetti({
       particleCount: 110,
       spread: 110,
@@ -579,12 +590,12 @@ function celebrate() {
       disableForReducedMotion: true,
     }),
   );
-  gsap.delayedCall(3.3, startFinaleFireworks);
+  later(3.3, startFinaleFireworks);
 }
 
 async function startFinaleFireworks() {
   confetti.reset();
-  stage.value = "ending";
+  stage.value = "stars";
   fireworksActive.value = true;
   await nextTick();
   if (!fireworksCanvas.value) {
@@ -595,13 +606,6 @@ async function startFinaleFireworks() {
     fireworksEffect?.destroy();
     fireworksEffect = null;
     fireworksActive.value = false;
-    nextTick(() =>
-      gsap.fromTo(
-        ".ending-content",
-        { opacity: 0, y: 28 },
-        { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" },
-      ),
-    );
   });
   if (!document.hidden) fireworksEffect.start();
 }
@@ -616,8 +620,6 @@ function onVisibility() {
     stopHold();
     cancelAnimationFrame(frame);
     frame = 0;
-    cancelAnimationFrame(typingFrame);
-    typingFrame = 0;
     cancelAnimationFrame(micFrame);
     micFrame = 0;
     birthdayMusic.pause();
@@ -627,8 +629,6 @@ function onVisibility() {
     fireworksEffect?.resume();
     gsap.globalTimeline.resume();
     if (renderer && !frame && stage.value !== "cover") animateStars();
-    if (stage.value === "letter" && typedText.value.length < letter.length)
-      startTyping();
     if (soundOn.value && opened.value) startMusic();
   }
 }
@@ -641,8 +641,8 @@ onBeforeUnmount(() => {
   warpEffect?.destroy();
   fireworksEffect?.destroy();
   heartTimer?.kill();
+  clearCelebration();
   cancelAnimationFrame(frame);
-  cancelAnimationFrame(typingFrame);
   cancelAnimationFrame(holdFrame);
   stopMicrophone();
   window.removeEventListener("resize", resizeStars);
@@ -657,7 +657,10 @@ onBeforeUnmount(() => {
 
 <template>
   <main
+    ref="shell"
     class="app-shell"
+    @pointermove="onPointerMove"
+    @pointerleave="resetParallax"
     @touchstart.passive="onTouchStart"
     @touchend.passive="onTouchEnd"
   >
@@ -740,64 +743,12 @@ onBeforeUnmount(() => {
       </section>
 
       <template v-else>
-        <section v-if="stage === 'main'" class="scene-page main-page">
-          <div class="stage-content main-content">
-            <div class="tiny-label">
-              ✦ &nbsp; {{ birthdayDate }} · 今夜星光为你闪耀 &nbsp; ✦
-            </div>
-            <div class="birthday-halo">
-              <span class="halo-ring ring-one"></span
-              ><span class="halo-ring ring-two"></span
-              ><span class="halo-spark spark-one">✦</span
-              ><span class="halo-spark spark-two">✧</span
-              ><span class="halo-spark spark-three">✦</span>
-              <div class="main-title">
-                <small>{{ birthdayName }} · HAPPY BIRTHDAY</small>
-                <h2>生日<br /><em>快乐</em></h2>
-                <div class="title-star">✦</div>
-              </div>
-            </div>
-            <p class="main-message">
-              愿你被爱包围，<br />也永远拥有奔向热爱的勇气。
-            </p>
-            <button
-              class="gesture-hint"
-              type="button"
-              @click="goStage('letter')"
-            >
-              <span>向上滑动，拆开祝福信</span><b>⌃</b>
-            </button>
-          </div>
+        <section v-if="stage === 'main'" class="scene-page memory-page">
+          <MemoryFilm :paused="warpActive || warpLeaving || photoOpen" @complete="goStage('letter')" />
         </section>
 
         <section v-if="stage === 'letter'" class="scene-page letter-page">
-          <div class="falling-lights" aria-hidden="true">
-            <i v-for="n in 12" :key="n" :style="{ '--i': n }"></i>
-          </div>
-          <div class="stage-content letter-content">
-            <span class="section-kicker">A LETTER JUST FOR YOU</span>
-            <h2>写给<span>{{ birthdayName }}</span></h2>
-            <div class="letter-paper">
-              <div class="letter-paper-top">
-                <span class="letter-date">{{ birthdayDate }}</span><span>DEAR {{ birthdayName }}</span><span>✦</span>
-              </div>
-              <p class="typewriter">
-                {{ typedText
-                }}<span v-if="typedText.length < letter.length" class="cursor"
-                  >▍</span
-                >
-              </p>
-              <div class="paper-sign">— 来自这片星空 <span>♡</span></div>
-            </div>
-            <button
-              class="pill-button letter-next"
-              type="button"
-              @click="goStage('puzzle')"
-            >
-              拼出一份惊喜 <span>↗</span>
-            </button>
-            <p class="swipe-small">继续上滑也可以哦 ↑</p>
-          </div>
+          <GiftLetter :name="birthdayName" :date="birthdayDate" @ready="letterReady = true" @sound="playUiSound" @next="goStage('puzzle')" />
         </section>
 
         <section v-if="stage === 'puzzle'" class="scene-page puzzle-page">
@@ -854,12 +805,13 @@ onBeforeUnmount(() => {
             <div
               class="cake-art"
               role="img"
-              aria-label="一块点着蜡烛的生日蛋糕"
+              :aria-label="candleOut ? '蜡烛已熄灭，白烟正在升起的生日蛋糕' : '一块点着蜡烛的生日蛋糕'"
             >
               <div class="cake-spark s1">✧</div>
               <div class="cake-spark s2">✦</div>
               <div class="cake-spark s3">✧</div>
-              <div class="flame"><span></span></div>
+              <div class="flame" :class="{ extinguished: candleOut }"><span></span></div>
+              <div v-if="smokeVisible" class="candle-smoke" aria-hidden="true"><i v-for="n in 6" :key="n" :style="{ '--i': n }"></i></div>
               <div class="wick"></div>
               <div class="candle"><i></i><i></i><i></i></div>
               <div class="cake-icing"><i></i><i></i><i></i><i></i><i></i></div>
@@ -873,11 +825,12 @@ onBeforeUnmount(() => {
             <div class="wish-actions">
               <button
                 class="mic-button"
+                :class="{ listening: micState === 'listening' }"
                 type="button"
                 :disabled="candleOut"
                 @click="startMicrophone"
               >
-                <span class="mic-icon">◉</span
+                <span class="mic-icon" aria-hidden="true">◉</span
                 >{{
                   micState === "listening"
                     ? "正在听你吹气…"
@@ -905,29 +858,34 @@ onBeforeUnmount(() => {
                   class="hold-fill"
                   :style="{ width: holdProgress + '%' }"
                 ></span
-                ><span class="hold-label">长按这里 2 秒吹灭蜡烛</span>
+                ><span class="hold-label">{{ candleOut ? "愿望已藏进这一缕白烟里" : "长按这里 2 秒吹灭蜡烛" }}</span>
               </button>
             </div>
           </div>
         </section>
 
-        <section v-if="stage === 'ending'" class="scene-page ending-page">
+        <Transition name="finale-scene">
+        <StarCollection v-if="stage === 'stars' && !fireworksActive" key="stars" @sound="playUiSound" @complete="stage = 'ending'" />
+
+        <section v-else-if="stage === 'ending'" key="ending" class="scene-page ending-page">
           <div class="heart-rain" aria-hidden="true">
             <span v-for="n in 15" :key="n" :style="{ '--i': n }">♥</span>
           </div>
           <div class="stage-content ending-content">
             <div class="ending-icon">✦</div>
             <span class="section-kicker">YOUR WISH IS ON ITS WAY</span>
-            <h2>愿你的每一天，<br /><em>都闪闪发光。</em></h2>
+            <h2>生日快乐🎂<br /><em>祝你永远18岁</em></h2>
             <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
             <div class="ending-line"></div>
             <span class="ending-love">生日快乐，{{ birthdayName }} ♡</span>
             <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
           </div>
+          <WishSky @secret="openSecretLetter" />
           <footer>Made with <span>❤️</span> by Lay</footer>
         </section>
+        </Transition>
 
-        <nav v-if="stage !== 'ending'" class="step-nav" aria-label="页面进度">
+        <nav v-if="!['ending', 'stars'].includes(stage)" class="step-nav" aria-label="页面进度">
           <span
             v-for="(item, i) in stageOrder"
             :key="item"
@@ -935,6 +893,10 @@ onBeforeUnmount(() => {
           ></span>
         </nav>
       </template>
+
+      <Transition name="courier-scene" @after-leave="restoreSecretFocus">
+        <BirdLetter v-if="secretLetterOpen" @close="secretLetterOpen = false" />
+      </Transition>
 
       <div
         v-if="heartOpen"
@@ -978,28 +940,29 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div
-        v-if="warpActive"
-        class="warp-overlay"
-        role="status"
-        aria-live="polite"
-        @touchstart.stop
-        @touchend.stop
-      >
-        <canvas
-          ref="warpCanvas"
-          class="warp-canvas"
-          aria-hidden="true"
-        ></canvas>
-        <div class="warp-vignette" aria-hidden="true"></div>
-        <div class="warp-portal" aria-hidden="true"><i></i><i></i><i></i></div>
-        <div class="warp-copy">
-          <span>✦ &nbsp; A LITTLE UNIVERSE &nbsp; ✦</span
-          ><strong>正在穿越<br />{{ birthdayName }}的生日宇宙</strong
-          ><small>愿望已经出发</small>
+      <Transition name="warp-exit" @after-leave="warpLeaving = false">
+        <div
+          v-if="warpActive"
+          class="warp-overlay"
+          role="status"
+          aria-live="polite"
+          @touchstart.stop
+          @touchend.stop
+        >
+          <canvas
+            ref="warpCanvas"
+            class="warp-canvas"
+            aria-hidden="true"
+          ></canvas>
+          <div class="warp-vignette" aria-hidden="true"></div>
+          <div class="warp-copy">
+            <span>✦ &nbsp; A LITTLE UNIVERSE &nbsp; ✦</span
+            ><strong>正在穿越<br />{{ birthdayName }}的生日宇宙</strong
+            ><small>愿望已经出发</small>
+          </div>
+          <div class="warp-progress" aria-hidden="true"><i></i></div>
         </div>
-        <div class="warp-progress" aria-hidden="true"><i></i></div>
-      </div>
+      </Transition>
 
       <div
         v-if="photoOpen"

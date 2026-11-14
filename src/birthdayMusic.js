@@ -97,10 +97,39 @@ export function createBirthdayMusic() {
     nextNoteAt = 0;
   }
 
+  function effect(kind) {
+    if (!context || context.state !== "running" || document.hidden) return;
+    const when = context.currentTime;
+    const notes = {
+      lid: [[60, 0], [67, .08]],
+      ribbon: [[76, 0], [79, .06], [83, .12]],
+      paper: [[72, 0], [79, .09], [84, .18]],
+      star: [[88, 0], [91, .08]],
+    }[kind] || [[84, 0]];
+    for (const [midi, offset] of notes) playNote(midi, when + offset, .12);
+    // The ribbon and tissue get two differently filtered, very quiet rustles.
+    if (!["ribbon", "paper"].includes(kind)) return;
+    const duration = kind === "ribbon" ? .18 : .32;
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const rustle = context.createBufferSource();
+    rustle.buffer = buffer;
+    const filter = context.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = kind === "ribbon" ? 2600 : 900;
+    const gain = context.createGain();
+    gain.gain.value = .055;
+    rustle.connect(filter); filter.connect(gain); gain.connect(master);
+    sources.add(rustle);
+    rustle.onended = () => { sources.delete(rustle); rustle.disconnect(); filter.disconnect(); gain.disconnect(); };
+    rustle.start(when); rustle.stop(when + duration);
+  }
+
   function dispose() {
     pause();
     context?.close();
   }
 
-  return { start, pause, reset, dispose };
+  return { start, pause, reset, dispose, effect };
 }

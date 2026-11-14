@@ -46,6 +46,8 @@ export function createFireworks(canvas, onComplete) {
         life: 700 + Math.random() * 500,
         color: colors[nextBurst % colors.length],
         size: 1.5 + Math.random() * 1.7,
+        gravity: .015 + Math.random() * .025,
+        drag: .978 + Math.random() * .014,
       });
     }
   }
@@ -62,8 +64,9 @@ export function createFireworks(canvas, onComplete) {
       if (spark.age >= spark.life) { sparks.splice(i, 1); continue; }
       spark.x += spark.vx * step;
       spark.y += spark.vy * step;
-      spark.vx *= 0.985;
-      spark.vy = spark.vy * 0.985 + 0.025 * step;
+      const drag = spark.drag ** step;
+      spark.vx *= drag;
+      spark.vy = spark.vy * drag + spark.gravity * step;
       ctx.globalAlpha = 1 - spark.age / spark.life;
       ctx.fillStyle = spark.color;
       ctx.beginPath();

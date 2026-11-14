@@ -1,6 +1,6 @@
 export const WARP_DURATION_MS = 5000;
 
-// A small 2D star tunnel. It runs only while the overlay is visible and
+// A small 2D star flight. It runs only while the overlay is visible and
 // advances its five-second clock using requestAnimationFrame timestamps.
 export function createWarpField(canvas, onComplete) {
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -20,8 +20,9 @@ export function createWarpField(canvas, onComplete) {
       x: Math.cos(angle) * spread,
       y: Math.sin(angle) * spread,
       z: depth,
-      speed: 0.65 + Math.random() * 0.8,
+      speed: 0.5 + Math.random() * 0.75,
       warm: Math.random() > 0.78,
+      trail: 0.025 + Math.random() * 0.035,
     };
   }
 
@@ -36,48 +37,60 @@ export function createWarpField(canvas, onComplete) {
 
   function draw(delta) {
     const cx = width / 2;
-    const cy = height / 2;
+    const cy = height * 0.43;
     const scale = Math.min(width, height) * 0.38;
     const progress = Math.min(elapsed / WARP_DURATION_MS, 1);
-    const rush = 1 + Math.sin(progress * Math.PI) * 2.8;
+    const rush = 0.65 + Math.sin(progress * Math.PI) * 2;
 
-    ctx.fillStyle = "#050b1e";
-    ctx.fillRect(0, 0, width, height);
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.63);
-    glow.addColorStop(0, "rgba(255,231,184,.35)");
-    glow.addColorStop(0.12, "rgba(102,128,220,.27)");
-    glow.addColorStop(0.46, "rgba(35,45,113,.21)");
-    glow.addColorStop(1, "rgba(5,11,30,0)");
-    ctx.fillStyle = glow;
+    const night = ctx.createLinearGradient(0, 0, width, height);
+    night.addColorStop(0, "#050b1e");
+    night.addColorStop(0.48, "#10172d");
+    night.addColorStop(1, "#070d20");
+    ctx.fillStyle = night;
     ctx.fillRect(0, 0, width, height);
 
-    for (let i = 0; i < 6; i++) {
-      const phase = (elapsed * 0.00024 + i / 6) % 1;
-      const radius = 10 + phase * phase * Math.max(width, height) * 0.85;
+    // Broad, faint ribbons drift behind the stars without a hard portal edge.
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.shadowBlur = Math.min(width, height) * 0.06;
+    for (let i = 0; i < 3; i++) {
+      const drift = Math.sin(elapsed * 0.00035 + i * 1.7) * height * 0.025;
+      const y = cy + (i - 1) * height * 0.17 + drift;
+      const light = ctx.createLinearGradient(0, y, width, y);
+      light.addColorStop(0, "rgba(145,167,220,0)");
+      light.addColorStop(0.45, i === 1 ? "rgba(230,206,165,.045)" : "rgba(145,167,220,.055)");
+      light.addColorStop(1, "rgba(145,167,220,0)");
       ctx.beginPath();
-      ctx.ellipse(cx, cy, radius, radius * 0.78, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(177,198,255,${(1 - phase) * 0.21})`;
-      ctx.lineWidth = 1 + phase * 2;
+      ctx.moveTo(-width * 0.1, y + height * 0.12);
+      ctx.bezierCurveTo(width * 0.25, y - height * 0.12, width * 0.7, y + height * 0.04, width * 1.1, y - height * 0.18);
+      ctx.strokeStyle = light;
+      ctx.shadowColor = i === 1 ? "#d6bd8c" : "#748fbd";
+      ctx.lineWidth = height * (0.025 + i * 0.012);
       ctx.stroke();
     }
+    ctx.restore();
+    ctx.lineCap = "round";
 
     for (const star of stars) {
       star.z -= delta * 0.00014 * star.speed * rush;
       if (star.z < 0.12) Object.assign(star, newStar(1.12));
       const headX = cx + (star.x / star.z) * scale;
       const headY = cy + (star.y / star.z) * scale;
-      const tailZ = star.z + 0.055 * rush;
+      const tailZ = star.z + star.trail * rush;
       const tailX = cx + (star.x / tailZ) * scale;
       const tailY = cy + (star.y / tailZ) * scale;
-      if (headX < -50 || headX > width + 50 || headY < -50 || headY > height + 50) continue;
+      if (headX < -50 || headX > width + 50 || headY < -50 || headY > height + 50) {
+        Object.assign(star, newStar(1.12));
+        continue;
+      }
       const near = Math.max(0, 1 - star.z / 1.2);
       ctx.beginPath();
       ctx.moveTo(tailX, tailY);
       ctx.lineTo(headX, headY);
       ctx.strokeStyle = star.warm
-        ? `rgba(255,224,166,${0.25 + near * 0.75})`
-        : `rgba(205,224,255,${0.23 + near * 0.72})`;
-      ctx.lineWidth = 0.7 + near * 2.1;
+        ? `rgba(255,224,183,${0.18 + near * 0.58})`
+        : `rgba(205,220,247,${0.15 + near * 0.55})`;
+      ctx.lineWidth = 0.45 + near * 1.15;
       ctx.stroke();
     }
   }
