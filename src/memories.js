@@ -1,3 +1,5 @@
+import { assetUrl } from './assets.js';
+
 // 时光胶片按数字顺序播放 time1 → time14；之后可逐张替换 caption。
 export const memories = [
   { src: "/time1.webp", alt: "时光回忆第 1 帧", caption: '终于18了，18岁生日快乐！' },
@@ -14,11 +16,11 @@ export const memories = [
   { src: "/time12.webp", alt: "时光回忆第 12 帧", caption: '难吃的减脂餐。 ✦' },
   { src: "/time13.webp", alt: "时光回忆第 13 帧", caption: '落日余晖。 ♡' },
   { src: "/time14.webp", alt: "时光回忆第 14 帧", caption: 'Go home。 ♡'  },
-].map(photo => ({ ...photo, originalSrc: photo.src, src: `/memories${photo.src}` }));
+].map(photo => ({ ...photo, originalSrc: photo.src, src: assetUrl(`/memories${photo.src}`) }));
 
 // 月亮彩蛋相册保留原来的三张照片。
 export const albumPhotos = [
   { src: "/pic1.webp", alt: "生日相册照片一", caption: "把这一刻，悄悄收藏。 ♡" },
   { src: "/pic2.webp", alt: "生日相册照片二", caption: "所有惊喜，都想与你分享。 ✦" },
   { src: "/pic3.webp", alt: "生日相册照片三", caption: "甜甜的愿望，正在实现。 ♡" },
-];
+].map(photo => ({ ...photo, src: assetUrl(photo.src) }));

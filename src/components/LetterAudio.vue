@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { assetUrl } from "../assets";
 
 const emit = defineEmits(["active"]);
 const audio = ref(null);
@@ -92,7 +93,7 @@ onBeforeUnmount(() => {
     <audio
       ref="audio"
       class="letter-audio-media"
-      src="/蜡笔小新.m4a"
+      :src="assetUrl('/蜡笔小新.m4a')"
       preload="none"
       @playing="onPlaying"
       @pause="onPause"

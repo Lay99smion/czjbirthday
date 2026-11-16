@@ -11,6 +11,8 @@ npm run dev
 
 生产构建：`npm run build`，输出在 `dist/`。
 
+GitHub Pages 构建：`npm run build:pages`，部署基路径为 `/czjbirthday/`；将 `dist/` 的内容发布到 `gh-pages` 分支根目录，并保留 `.nojekyll`。线上地址为 `https://lay99smion.github.io/czjbirthday/`。本地开发及普通根目录部署继续使用原命令。
+
 ## 自定义
 
 - 本次祝福对象为xxx，生日为 1月10日。在 `src/App.vue` 修改 `birthdayName`、`birthdayDate`、各场景标题及结尾署名；贺卡正文位于 `src/components/GiftLetter.vue`。

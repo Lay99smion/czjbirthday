@@ -13,6 +13,7 @@ import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
 import { albumPhotos as photos } from "./memories";
 import { preloadMemoryPhotos } from "./memoryPhotos";
+import { assetUrl } from "./assets";
 import {
   countPlacedTiles,
   createScrambledPuzzle,
@@ -711,7 +712,7 @@ onBeforeUnmount(() => {
           如果今天的愿望有回音，<br />那一定是宇宙也在轻轻说：<br />{{ birthdayName }}，很高兴你来到这个世界。
         </p>
         <div class="secret-divider">✦ &nbsp; ✦ &nbsp; ✦</div>
-        <a href="/" class="pill-button">返回生日夜空 <span>↗</span></a>
+        <a :href="assetUrl('')" class="pill-button">返回生日夜空 <span>↗</span></a>
       </div>
       <p class="secret-footer">ONLY FOR YOU · WITH LOVE</p>
     </section>
@@ -794,7 +795,7 @@ onBeforeUnmount(() => {
             </p>
             <div class="puzzle-reference">
               <img
-                src="/pic2.webp"
+                :src="assetUrl('/pic2.webp')"
                 loading="lazy"
                 alt="拼图完成参考图"
               /><span>参考图</span>
@@ -810,6 +811,7 @@ onBeforeUnmount(() => {
                 }"
                 :style="{
                   backgroundPosition: `${(piece % 3) * 50}% ${Math.floor(piece / 3) * 50}%`,
+                  backgroundImage: `url('${assetUrl('/pic2.webp')}')`,
                 }"
                 type="button"
                 :aria-label="`第 ${position + 1} 格，拼图碎片`"
@@ -922,7 +924,7 @@ onBeforeUnmount(() => {
         </section>
         </Transition>
 
-        <BirthdayTicket v-if="stage === 'ticket'" :name="birthdayName" :date="birthdayDate" photo="/time1.webp" :initial-wish="latestWish" @wish="latestWish = $event" @back="returnFromTicket" />
+        <BirthdayTicket v-if="stage === 'ticket'" :name="birthdayName" :date="birthdayDate" :photo="assetUrl('/time1.webp')" :initial-wish="latestWish" @wish="latestWish = $event" @back="returnFromTicket" />
 
         <nav v-if="!['ending', 'stars', 'ticket'].includes(stage)" class="step-nav" aria-label="页面进度">
           <span

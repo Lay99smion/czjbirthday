@@ -7,6 +7,7 @@
     "photos:prepare": "node scripts/prepare-memory-photos.mjs",
     "dev": "npm run photos:prepare && vite --host 0.0.0.0",
     "build": "npm run photos:prepare && vite build",
+    "build:pages": "npm run photos:prepare && vite build --base=/czjbirthday/",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
