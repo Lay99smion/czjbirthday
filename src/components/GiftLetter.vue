@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import LetterAudio from "./LetterAudio.vue";
 const props = defineProps({ name: String, date: String });
-const emit = defineEmits(["ready", "sound", "next"]);
+const emit = defineEmits(["ready", "sound", "next", "voice"]);
 const layer = ref(0);
 const opening = ref(false);
 const dragging = ref(false);
@@ -9,7 +10,9 @@ const dragOffset = ref(0);
 const dragProgress = ref(0);
 const magicParticles = ref([]);
 const trailPoints = ref([]);
-const trailPath = computed(() => trailPoints.value.map(point => `${point.x},${point.y}`).join(" "));
+const trailPath = computed(() =>
+  trailPoints.value.map((point) => `${point.x},${point.y}`).join(" "),
+);
 const SWIPE_DISTANCE = 76;
 const typedText = ref("");
 const letter = computed(
@@ -17,7 +20,10 @@ const letter = computed(
     `亲爱的${props.name}：\n\n愿今天的风轻一点，星光亮一点；\n愿每一个平凡的日子，都藏着让你微笑的惊喜。\n\n新的一岁，继续勇敢地喜欢这个世界，\n也记得好好喜欢自己。\n\n生日快乐。今晚，所有的星星都为你闪耀。`,
 );
 const prompt = computed(
-  () => ["按住盒盖，向上滑动", "按住丝带，向下滑动", "轻点碎纸，拆开贺卡"][layer.value],
+  () =>
+    ["按住盒盖，向上滑动", "按住丝带，向下滑动", "轻点碎纸，拆开贺卡"][
+      layer.value
+    ],
 );
 const gesturePrompt = computed(() => {
   if (opening.value) return "魔法正在发生…";
@@ -37,8 +43,12 @@ let layerTimer,
   typingFrame = 0,
   typingElapsed = 0,
   lastTypingTime = null;
-let dragPointer = null, dragStartX = 0, dragStartY = 0, dragTarget = null;
-let particleId = 0, lastSparkAt = -Infinity;
+let dragPointer = null,
+  dragStartX = 0,
+  dragStartY = 0,
+  dragTarget = null;
+let particleId = 0,
+  lastSparkAt = -Infinity;
 function pointInBox(event) {
   const bounds = event.currentTarget.getBoundingClientRect();
   return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
@@ -50,17 +60,28 @@ function sprinkle(point, burst = false) {
   const sparks = Array.from({ length: burst ? 22 : 3 }, (_, i) => {
     const angle = Math.random() * Math.PI * 2;
     const reach = burst ? 30 + Math.random() * 65 : 12 + Math.random() * 24;
-    return { id: ++particleId, glyph: i % 3 === 0 ? "✦" : "·", style: {
-      left: `${point.x}px`, top: `${point.y}px`,
-      "--dx": `${Math.cos(angle) * reach}px`, "--dy": `${Math.sin(angle) * reach - 18}px`,
-      "--spin": `${Math.random() * 180 - 90}deg`, "--life": `${.55 + Math.random() * .4}s`,
-      "--size": `${5 + Math.random() * 9}px`, "--tint": layer.value === 1 && i % 2 ? "#d6ccff" : "#ffedb9",
-    } };
+    return {
+      id: ++particleId,
+      glyph: i % 3 === 0 ? "✦" : "·",
+      style: {
+        left: `${point.x}px`,
+        top: `${point.y}px`,
+        "--dx": `${Math.cos(angle) * reach}px`,
+        "--dy": `${Math.sin(angle) * reach - 18}px`,
+        "--spin": `${Math.random() * 180 - 90}deg`,
+        "--life": `${0.55 + Math.random() * 0.4}s`,
+        "--size": `${5 + Math.random() * 9}px`,
+        "--tint": layer.value === 1 && i % 2 ? "#d6ccff" : "#ffedb9",
+      },
+    };
   });
   magicParticles.value = [...magicParticles.value, ...sparks].slice(-66);
 }
 function removeSpark(id, event) {
-  if (event.animationName === "giftSpark") magicParticles.value = magicParticles.value.filter(spark => spark.id !== id);
+  if (event.animationName === "giftSpark")
+    magicParticles.value = magicParticles.value.filter(
+      (spark) => spark.id !== id,
+    );
 }
 function releasePointer() {
   const pointer = dragPointer;
@@ -70,10 +91,18 @@ function releasePointer() {
   dragging.value = false;
   dragOffset.value = 0;
   dragProgress.value = 0;
-  if (pointer !== null && target?.hasPointerCapture(pointer)) target.releasePointerCapture(pointer);
+  if (pointer !== null && target?.hasPointerCapture(pointer))
+    target.releasePointerCapture(pointer);
 }
 function onGiftPointerDown(event) {
-  if (opening.value || layer.value > 1 || dragPointer !== null || !event.isPrimary || event.button > 0) return;
+  if (
+    opening.value ||
+    layer.value > 1 ||
+    dragPointer !== null ||
+    !event.isPrimary ||
+    event.button > 0
+  )
+    return;
   event.preventDefault();
   dragPointer = event.pointerId;
   dragTarget = event.currentTarget;
@@ -114,7 +143,10 @@ function onGiftClick(event) {
   openLayer(point);
 }
 function onGiftKeydown(event) {
-  if ((layer.value === 0 && event.key === "ArrowUp") || (layer.value === 1 && event.key === "ArrowDown")) {
+  if (
+    (layer.value === 0 && event.key === "ArrowUp") ||
+    (layer.value === 1 && event.key === "ArrowDown")
+  ) {
     event.preventDefault();
     openLayer();
   }
@@ -190,7 +222,10 @@ onBeforeUnmount(() => {
           :key="layer"
           class="gift-scene"
           :class="[`gift-layer-${layer}`, { opening, dragging }]"
-          :style="{ '--gift-drag': `${dragOffset}px`, '--gift-charge': dragProgress }"
+          :style="{
+            '--gift-drag': `${dragOffset}px`,
+            '--gift-charge': dragProgress,
+          }"
         >
           <span class="gift-count">{{
             ["01 · 一份礼物", "02 · 一缕温柔", "03 · 一点心意"][layer]
@@ -219,13 +254,40 @@ onBeforeUnmount(() => {
             <span v-if="layer === 2" class="gift-tissue"
               ><i></i><i></i><i></i><b>✉</b></span
             >
-            <svg class="gift-magic-stroke" viewBox="0 0 260 220" aria-hidden="true"><polyline :points="trailPath" /></svg>
-            <span class="gift-magic-trail" aria-hidden="true"><i v-for="spark in magicParticles" :key="spark.id" :style="spark.style" @animationend="removeSpark(spark.id, $event)">{{ spark.glyph }}</i></span>
+            <svg
+              class="gift-magic-stroke"
+              viewBox="0 0 260 220"
+              aria-hidden="true"
+            >
+              <polyline :points="trailPath" />
+            </svg>
+            <span class="gift-magic-trail" aria-hidden="true"
+              ><i
+                v-for="spark in magicParticles"
+                :key="spark.id"
+                :style="spark.style"
+                @animationend="removeSpark(spark.id, $event)"
+                >{{ spark.glyph }}</i
+              ></span
+            >
           </button>
           <p class="gift-prompt">
-            <span class="gift-gesture-arrow" :class="{ down: layer === 1 }" aria-hidden="true">{{ layer === 0 ? '↑' : layer === 1 ? '↓' : '✦' }}</span>{{ gesturePrompt }}
+            <span
+              class="gift-gesture-arrow"
+              :class="{ down: layer === 1 }"
+              aria-hidden="true"
+              >{{ layer === 0 ? "↑" : layer === 1 ? "↓" : "✦" }}</span
+            >{{ gesturePrompt }}
           </p>
-          <div class="gift-swipe-progress" :class="{ charged: dragProgress >= 1 }" aria-hidden="true"><i :style="{ transform: `scaleX(${opening ? 1 : dragProgress})` }"></i></div>
+          <div
+            class="gift-swipe-progress"
+            :class="{ charged: dragProgress >= 1 }"
+            aria-hidden="true"
+          >
+            <i
+              :style="{ transform: `scaleX(${opening ? 1 : dragProgress})` }"
+            ></i>
+          </div>
           <small>还有一点点惊喜，藏在里面。</small>
         </div>
         <article
@@ -247,7 +309,8 @@ onBeforeUnmount(() => {
               >▍</span
             >
           </p>
-          <div class="paper-sign">— 来自这片星空 <span>♡</span></div>
+          <div class="paper-sign">— 来自你最好的小弟 <span>♡</span></div>
+          <LetterAudio @active="emit('voice', $event)" />
         </article>
       </Transition>
     </div>

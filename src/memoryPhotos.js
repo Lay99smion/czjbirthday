@@ -1,0 +1,18 @@
+import { memories } from './memories.js';
+
+// Warm the same URLs the film uses while the cover and star flight are showing.
+// Keep image references so decoded photos can be reused by the slideshow.
+const preloaded = new Map();
+export function preloadMemoryPhotos() {
+  if (typeof Image === 'undefined') return;
+  for (const [index, photo] of memories.entries()) {
+    if (preloaded.has(photo.src)) continue;
+    const image = new Image();
+    image.decoding = 'async';
+    image.fetchPriority = index < 2 ? 'high' : 'low';
+    image.onerror = () => { preloaded.delete(photo.src); };
+    preloaded.set(photo.src, image);
+    image.src = photo.src;
+    image.decode?.().catch(() => { /* The film offers a retry if a request fails. */ });
+  }
+}

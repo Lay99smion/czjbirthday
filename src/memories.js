@@ -14,7 +14,7 @@ export const memories = [
   { src: "/time12.webp", alt: "时光回忆第 12 帧", caption: '难吃的减脂餐。 ✦' },
   { src: "/time13.webp", alt: "时光回忆第 13 帧", caption: '落日余晖。 ♡' },
   { src: "/time14.webp", alt: "时光回忆第 14 帧", caption: 'Go home。 ♡'  },
-];
+].map(photo => ({ ...photo, originalSrc: photo.src, src: `/memories${photo.src}` }));
 
 // 月亮彩蛋相册保留原来的三张照片。
 export const albumPhotos = [

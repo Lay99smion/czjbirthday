@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { gsap } from "gsap";
 import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
@@ -10,7 +10,9 @@ import GiftLetter from "./components/GiftLetter.vue";
 import StarCollection from "./components/StarCollection.vue";
 import WishSky from "./components/WishSky.vue";
 import BirdLetter from "./components/BirdLetter.vue";
+import BirthdayTicket from "./components/BirthdayTicket.vue";
 import { albumPhotos as photos } from "./memories";
+import { preloadMemoryPhotos } from "./memoryPhotos";
 import {
   countPlacedTiles,
   createScrambledPuzzle,
@@ -26,7 +28,9 @@ const stage = ref("cover");
 const opened = ref(false);
 const isOpening = ref(false);
 const soundOn = ref(true);
+const letterAudioActive = ref(false);
 const photoOpen = ref(false);
+const memoryTransitionActive = ref(false);
 const moonTaps = ref(0);
 const letterReady = ref(false);
 const smokeVisible = ref(false);
@@ -41,6 +45,8 @@ const fireworksActive = ref(false);
 const fireworksCanvas = ref(null);
 const heartOpen = ref(false);
 const secretLetterOpen = ref(false);
+const latestWish = ref("");
+const ticketEntry = ref(null);
 const puzzleTiles = ref(createScrambledPuzzle());
 const selectedTile = ref(null);
 const puzzleSolved = ref(false);
@@ -69,6 +75,7 @@ let warpEffect = null;
 let fireworksEffect = null;
 let heartTimer = null;
 let secretReturnFocus = null;
+let disposing = false;
 function openSecretLetter(input) {
   if (secretLetterOpen.value) return;
   secretReturnFocus = input;
@@ -79,6 +86,13 @@ function restoreSecretFocus() {
   secretReturnFocus?.focus({ preventScroll: true });
   secretReturnFocus = null;
 }
+function openBirthdayTicket() {
+  stage.value = "ticket";
+}
+function returnFromTicket() {
+  stage.value = "ending";
+  nextTick(() => ticketEntry.value?.focus({ preventScroll: true }));
+}
 const celebrationCalls = new Set();
 function later(seconds, callback) {
   const call = gsap.delayedCall(seconds, () => { celebrationCalls.delete(call); callback(); });
@@ -86,9 +100,9 @@ function later(seconds, callback) {
   return call;
 }
 function clearCelebration() { celebrationCalls.forEach(call => call.kill()); celebrationCalls.clear(); }
-function playUiSound(kind) { if (soundOn.value) birthdayMusic.effect(kind); }
+function playUiSound(kind) { if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind); }
 function onPointerMove(event) {
-  if (event.pointerType === "touch" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (memoryTransitionActive.value || event.pointerType === "touch" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   tiltX = (event.clientX / innerWidth - .5) * 2;
   tiltY = (event.clientY / innerHeight - .5) * 2;
   shell.value?.style.setProperty("--px", `${tiltX * 7}px`);
@@ -103,7 +117,7 @@ function resetParallax() {
 async function initStars() {
   if (!starCanvas.value || SECRET) return;
   if (renderer) {
-    if (!frame && !document.hidden) animateStars();
+    if (!frame && !document.hidden && !memoryTransitionActive.value) animateStars();
     return;
   }
   try {
@@ -165,7 +179,7 @@ function resizeStars() {
 }
 
 function animateStars() {
-  if (!renderer || document.hidden) return;
+  if (!renderer || document.hidden || memoryTransitionActive.value) return;
   frame = requestAnimationFrame(animateStars);
   const t = performance.now() * 0.00006;
   stars.rotation.y +=
@@ -174,6 +188,12 @@ function animateStars() {
   stars.rotation.z += 0.00009;
   renderer.render(scene, camera);
 }
+
+watch(memoryTransitionActive, active => {
+  cancelAnimationFrame(frame);
+  frame = 0;
+  if (!active && renderer && !document.hidden && opened.value) animateStars();
+});
 
 async function requestOrientation() {
   try {
@@ -211,6 +231,7 @@ async function startWarp() {
 }
 
 function onOrientation(event) {
+  if (memoryTransitionActive.value) return;
   tiltX = Math.max(-1, Math.min(1, (event.gamma || 0) / 35));
   tiltY = Math.max(-1, Math.min(1, (event.beta || 0) / 50));
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -219,10 +240,17 @@ function onOrientation(event) {
 }
 
 function startMusic() {
-  if (!soundOn.value || document.hidden) return;
+  if (disposing || !soundOn.value || letterAudioActive.value || document.hidden) return;
   birthdayMusic.start().catch(() => {
     soundOn.value = false;
   });
+}
+
+function onLetterAudio(active) {
+  if (letterAudioActive.value === active) return;
+  letterAudioActive.value = active;
+  if (active) birthdayMusic.pause();
+  else if (opened.value) startMusic();
 }
 
 function toggleMusic() {
@@ -316,11 +344,13 @@ function restartExperience() {
   stage.value = "cover";
   opened.value = false;
   isOpening.value = false;
+  letterAudioActive.value = false;
   warpActive.value = false;
   warpLeaving.value = false;
   fireworksActive.value = false;
   heartOpen.value = false;
   secretLetterOpen.value = false;
+  latestWish.value = "";
   secretReturnFocus = null;
   candleOut.value = false;
   micState.value = "idle";
@@ -329,6 +359,7 @@ function restartExperience() {
   smokeVisible.value = false;
   moonTaps.value = 0;
   photoOpen.value = false;
+  memoryTransitionActive.value = false;
   puzzleSolved.value = false;
   selectedTile.value = null;
   puzzleTiles.value = createScrambledPuzzle();
@@ -378,7 +409,7 @@ function onTouchEnd(event) {
     warpActive.value ||
     heartOpen.value ||
     fireworksActive.value ||
-    ["ending", "stars", "main"].includes(stage.value)
+    ["ending", "stars", "main", "ticket"].includes(stage.value)
   )
     return;
   const dy = (event.changedTouches[0]?.clientY || 0) - touchY;
@@ -634,10 +665,12 @@ function onVisibility() {
 }
 
 onMounted(() => {
+  if (!SECRET) preloadMemoryPhotos();
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("resize", resizeStars, { passive: true });
 });
 onBeforeUnmount(() => {
+  disposing = true;
   warpEffect?.destroy();
   fireworksEffect?.destroy();
   heartTimer?.kill();
@@ -659,6 +692,7 @@ onBeforeUnmount(() => {
   <main
     ref="shell"
     class="app-shell"
+    :class="{ 'memory-transition': memoryTransitionActive }"
     @pointermove="onPointerMove"
     @pointerleave="resetParallax"
     @touchstart.passive="onTouchStart"
@@ -744,11 +778,11 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <section v-if="stage === 'main'" class="scene-page memory-page">
-          <MemoryFilm :paused="warpActive || warpLeaving || photoOpen" @complete="goStage('letter')" />
+          <MemoryFilm :paused="warpActive || warpLeaving || photoOpen" @departing="memoryTransitionActive = $event" @complete="goStage('letter')" />
         </section>
 
         <section v-if="stage === 'letter'" class="scene-page letter-page">
-          <GiftLetter :name="birthdayName" :date="birthdayDate" @ready="letterReady = true" @sound="playUiSound" @next="goStage('puzzle')" />
+          <GiftLetter :name="birthdayName" :date="birthdayDate" @ready="letterReady = true" @sound="playUiSound" @voice="onLetterAudio" @next="goStage('puzzle')" />
         </section>
 
         <section v-if="stage === 'puzzle'" class="scene-page puzzle-page">
@@ -878,14 +912,19 @@ onBeforeUnmount(() => {
             <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
             <div class="ending-line"></div>
             <span class="ending-love">生日快乐，{{ birthdayName }} ♡</span>
-            <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
+            <div class="ending-actions">
+              <button ref="ticketEntry" class="ticket-entry" type="button" @click="openBirthdayTicket">制作生日纪念票 <span>↗</span></button>
+              <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
+            </div>
           </div>
-          <WishSky @secret="openSecretLetter" />
+          <WishSky @secret="openSecretLetter" @wish="latestWish = $event" />
           <footer>Made with <span>❤️</span> by Lay</footer>
         </section>
         </Transition>
 
-        <nav v-if="!['ending', 'stars'].includes(stage)" class="step-nav" aria-label="页面进度">
+        <BirthdayTicket v-if="stage === 'ticket'" :name="birthdayName" :date="birthdayDate" photo="/time1.webp" :initial-wish="latestWish" @wish="latestWish = $event" @back="returnFromTicket" />
+
+        <nav v-if="!['ending', 'stars', 'ticket'].includes(stage)" class="step-nav" aria-label="页面进度">
           <span
             v-for="(item, i) in stageOrder"
             :key="item"

@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 import { secretLetter } from "../secretLetter";
-const emit = defineEmits(["secret"]);
+const emit = defineEmits(["secret", "wish"]);
 const wish = ref("");
 const bubbles = ref([]);
 const bursts = ref([]);
@@ -21,6 +21,7 @@ function release(event) {
     return;
   }
   const id = ++serial;
+  emit("wish", text);
   bubbles.value.push({ id, text, left: 18 + Math.random() * 64, rise: Math.max(140, (sky.value?.clientHeight || innerHeight) - 230) });
   if (bubbles.value.length > 8) bubbles.value.shift();
   wish.value = "";

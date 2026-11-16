@@ -1,9 +1,9 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { memories } from "../memories";
 
 const props = defineProps({ paused: Boolean });
-const emit = defineEmits(["complete"]);
+const emit = defineEmits(["complete", "departing"]);
 const rail = ref(null);
 const active = ref(0);
 const dragging = ref(false);
@@ -11,39 +11,46 @@ const holding = ref(false);
 const completed = ref(false);
 const dissolving = ref(false);
 const progress = ref(0);
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const TIER_DURATION = 2800;
-const EXIT_DURATION = reducedMotion ? 320 : 3580;
-const vortexTiers = [
-  { y: 'clamp(-155px, -20dvh, -100px)', radius: 'min(44vw, 27dvh)', scale: 1.05 },
-  { y: '-6px', radius: 'min(36vw, 23dvh)', scale: .88 },
-  { y: 'clamp(90px, 18dvh, 145px)', radius: 'min(28vw, 18dvh)', scale: .74 },
-].map((tier, level) => {
-  const photos = memories.filter((_, i) => i % 3 === level);
-  return {
-    style: {
-      '--tier-y': tier.y, '--tier-radius': tier.radius,
-      '--tier-scale': tier.scale, '--tier-delay': `${level * 300}ms`,
-    },
-    photos: photos.map((photo, i) => ({
-      ...photo,
-      style: {
-        '--angle': `${i * 360 / photos.length + level * 32}deg`,
-        '--photo-delay': `${level * 300 + Math.min(i * 30, 120)}ms`,
-        '--tilt': `${i % 2 ? 5 : -5}deg`,
-      },
-    })),
-  };
+const photoStates = ref(memories.map(() => 'loading'));
+const photoAttempts = ref(memories.map(() => 0));
+const waitingNext = ref(false);
+const filmHint = computed(() => {
+  if (photoStates.value[active.value] === 'error') return '可以重试这张照片，或继续翻看其他回忆';
+  if (photoStates.value[active.value] !== 'ready') return '正在准备这张回忆，稍等片刻…';
+  if (waitingNext.value) return photoStates.value[active.value + 1] === 'error' ? '下一张回忆暂时没能抵达，可以手动翻页重试' : '正在准备下一张回忆…';
+  return reducedMotion ? '左右拖动，慢慢翻看每一张' : holding.value ? '已暂停 · 左右拖动也可以翻看' : '自动慢放中 · 也可以左右拖动';
 });
-const vortexFlow = Array.from({ length: 110 }, (_, i) => {
-  const t = i / 109;
-  const angle = t * Math.PI * 5;
-  const radius = 280 * (1 - t);
-  return `${300 + Math.cos(angle) * radius},${300 + Math.sin(angle) * radius}`;
-}).join(' ');
-let frame = 0, last = 0, phase = "hold", dwell = 0, resumeAt = 0, exitElapsed = 0;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EXIT_DURATION = reducedMotion ? 320 : 2000;
+let disposed = false;
+let frame = 0, last = null, phase = "hold", dwell = 0, resumeAt = 0, exitElapsed = 0;
 let pointer = null, pointerX = 0, pointerScroll = 0;
 const DWELL = 3400;
+
+async function photoLoaded(index, event) {
+  const image = event.currentTarget;
+  const attempt = photoAttempts.value[index];
+  try {
+    await image.decode?.();
+  } catch {
+    if (disposed || attempt !== photoAttempts.value[index]) return;
+    if (!image.naturalWidth) return photoFailed(index);
+  }
+  if (disposed || attempt !== photoAttempts.value[index]) return;
+  photoStates.value[index] = 'ready';
+  if (index === active.value) {
+    dwell = 0;
+    progress.value = 0;
+    last = null;
+  }
+}
+function photoFailed(index) {
+  if (!disposed) photoStates.value[index] = 'error';
+}
+function retryPhoto(index) {
+  photoStates.value[index] = 'loading';
+  photoAttempts.value[index]++;
+}
 
 function cardWidth() {
   return rail.value?.querySelector(".film-frame")?.offsetWidth || 240;
@@ -56,15 +63,17 @@ function finish() {
   if (completed.value || dissolving.value || props.paused) return;
   dissolving.value = true;
   exitElapsed = 0;
-  last = 0;
+  last = null;
+  emit("departing", true);
 }
 function tick(now) {
   frame = requestAnimationFrame(tick);
-  const dt = Math.min(now - (last || now), 50);
+  const elapsed = last === null ? 0 : Math.max(0, now - last);
+  const dt = Math.min(elapsed, 50);
   last = now;
   if (!rail.value || props.paused || document.hidden || completed.value) return;
   if (dissolving.value) {
-    exitElapsed += dt;
+    exitElapsed += elapsed;
     if (exitElapsed >= EXIT_DURATION) {
       completed.value = true;
       cancelAnimationFrame(frame);
@@ -75,6 +84,7 @@ function tick(now) {
   }
   if (dragging.value || holding.value || now < resumeAt) return;
   if (reducedMotion) return;
+  if (photoStates.value[active.value] !== 'ready') return;
   if (phase === "hold") {
     dwell += dt;
     progress.value = Math.min(1, dwell / DWELL);
@@ -85,6 +95,8 @@ function tick(now) {
       progress.value = 0;
     }
   } else {
+    waitingNext.value = photoStates.value[active.value + 1] !== 'ready';
+    if (waitingNext.value) return;
     const target = (active.value + 1) * cardStep();
     rail.value.scrollLeft = Math.min(target, rail.value.scrollLeft + dt * .095);
     if (rail.value.scrollLeft >= target - 1) {
@@ -98,6 +110,7 @@ function settle() {
   updateActive();
   rail.value.scrollTo({ left: active.value * cardStep(), behavior: reducedMotion ? "instant" : "smooth" });
   phase = "hold";
+  waitingNext.value = false;
   dwell = 0;
   progress.value = 0;
   resumeAt = performance.now() + 1200;
@@ -127,27 +140,31 @@ function show(index) {
   active.value = Math.max(0, Math.min(memories.length - 1, index));
   rail.value.scrollTo({ left: active.value * cardStep(), behavior: reducedMotion ? "instant" : "smooth" });
   phase = "hold";
+  waitingNext.value = false;
   dwell = 0;
   progress.value = 0;
   resumeAt = performance.now() + 1200;
 }
-watch(() => props.paused, () => { last = 0; });
-function resetClock() { last = 0; }
+watch(() => props.paused, () => { last = null; });
+function resetClock() { last = null; }
 onMounted(async () => {
   await nextTick();
+  if (disposed) return;
   frame = requestAnimationFrame(tick);
   window.addEventListener("resize", settle);
   document.addEventListener("visibilitychange", resetClock);
 });
 onBeforeUnmount(() => {
+  disposed = true;
   cancelAnimationFrame(frame);
+  if (dissolving.value) emit("departing", false);
   window.removeEventListener("resize", settle);
   document.removeEventListener("visibilitychange", resetClock);
 });
 </script>
 
 <template>
-  <div class="memory-content" :class="{ departing: dissolving }" :style="{ '--vortex-duration': `${EXIT_DURATION}ms`, '--tier-duration': `${TIER_DURATION}ms` }">
+  <div class="memory-content" :class="{ departing: dissolving, paused: props.paused }" :style="{ '--memory-exit-duration': `${EXIT_DURATION}ms` }">
     <div class="memory-film-ui" :inert="dissolving" :aria-hidden="dissolving || undefined">
       <span class="section-kicker">LITTLE MOMENTS, FOREVER</span>
       <h2>把时光，<em>慢慢放映。</em></h2>
@@ -158,7 +175,15 @@ onBeforeUnmount(() => {
         <div class="film-track">
           <figure v-for="(photo, i) in memories" :key="photo.src" class="film-frame" :class="{ current: i === active }">
             <div class="film-edge" aria-hidden="true"><i v-for="n in 9" :key="n"></i></div>
-            <div class="film-image"><img :src="photo.src" :alt="photo.alt" :loading="i === 0 ? 'eager' : 'lazy'" decoding="async" draggable="false" /><span>FRAME {{ String(i + 1).padStart(2, '0') }}</span></div>
+            <div class="film-image" :aria-busy="photoStates[i] === 'loading'">
+              <img :src="photoAttempts[i] ? `${photo.src}?retry=${photoAttempts[i]}` : photo.src" :alt="photo.alt" :class="{ ready: photoStates[i] === 'ready' }" loading="eager" :fetchpriority="i < 2 ? 'high' : 'low'" decoding="async" draggable="false" @load="photoLoaded(i, $event)" @error="photoFailed(i)" />
+              <div v-if="photoStates[i] !== 'ready'" class="film-photo-status">
+                <span aria-hidden="true">✦</span>
+                <p>{{ photoStates[i] === 'error' ? '这张回忆暂时没能抵达' : '正在准备这张回忆…' }}</p>
+                <button v-if="photoStates[i] === 'error'" type="button" @pointerdown.stop @click.stop="retryPhoto(i)">重新加载</button>
+              </div>
+              <span>FRAME {{ String(i + 1).padStart(2, '0') }}</span>
+            </div>
             <div class="film-edge" aria-hidden="true"><i v-for="n in 9" :key="n"></i></div>
           </figure>
         </div>
@@ -171,17 +196,13 @@ onBeforeUnmount(() => {
         <button type="button" aria-label="下一张回忆" :disabled="active === memories.length - 1" @click="show(active + 1)">›</button>
       </div>
       <div class="film-timer" aria-hidden="true"><i :style="{ transform: `scaleX(${progress})` }"></i></div>
-      <p class="film-hint">{{ reducedMotion ? '左右拖动，慢慢翻看每一张' : '自动慢放中 · 也可以左右拖动' }}</p>
+      <p class="film-hint" role="status">{{ filmHint }}</p>
       <button v-if="reducedMotion && active === memories.length - 1" class="pill-button" type="button" @click="finish">拆开下一份惊喜 <span>↗</span></button>
     </div>
-    <div v-if="dissolving && !reducedMotion" class="memory-vortex" :class="{ paused: props.paused }" aria-hidden="true">
-      <div class="vortex-depth"></div>
-      <div v-for="(tier, level) in vortexTiers" :key="level" class="vortex-tier" :style="tier.style">
-        <svg class="vortex-current" viewBox="0 0 600 600"><polyline v-for="n in 3" :key="n" :points="vortexFlow" :transform="`rotate(${n * 120} 300 300)`" /></svg>
-        <div v-for="photo in tier.photos" :key="photo.src" class="vortex-orbit" :style="photo.style">
-          <figure class="vortex-photo"><img :src="photo.src" alt="" decoding="async" draggable="false" /></figure>
-        </div>
-      </div>
+    <div v-if="dissolving && !reducedMotion" class="memory-exit" aria-hidden="true">
+      <i class="memory-exit-glow"></i>
+      <i class="memory-exit-line"></i>
+      <span class="memory-exit-star">✦</span>
     </div>
     <span v-if="dissolving" class="sr-only" role="status">把每一帧回忆藏进心里，下一份惊喜正在靠近。</span>
   </div>
