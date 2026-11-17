@@ -161,14 +161,84 @@ test("the three stars reveal only the selected message and gate the complete ble
     stars[i].props.onClick({ currentTarget: stars[i] }); await nextTick();
     assert.equal(text(all(view.root, node => node.props?.id === 'whisper-message')[0]), messages[i]);
     assert.equal(view.one("unlock-blessing"), undefined);
+    assert.equal(view.one('czj-constellation'), undefined, 'the constellation waits until the last message has been closed');
     view.one("star-whisper").querySelector('button').props.onClick(); await nextTick();
     await advance(0); await advance(16);
   }
   assert.equal(unlocked, 0);
   assert.ok(view.one("unlock-blessing"));
+  const constellation = view.one('czj-constellation');
+  assert.ok(constellation);
+  assert.match(constellation.props['aria-label'], /CZJ/);
+  assert.equal(all(constellation, node => node.tag === 'polyline').length, 3);
+  const star = view.one('collect-star');
+  star.props.onClick({ currentTarget: star }); await nextTick();
+  assert.equal(view.one('czj-constellation'), constellation, 'rereading a star keeps the completed constellation');
+  assert.equal(text(all(view.root, node => node.props?.id === 'whisper-message')[0]), messages[0]);
+  view.one('star-whisper').querySelector('button').props.onClick(); await nextTick();
   view.one("unlock-blessing").props.onClick();
   assert.equal(unlocked, 1);
   view.app.unmount(); frames.clear();
+});
+
+test('a photo flips to its own note and pauses autoplay until flipped back', async t => {
+  const originalNote = memories[0].backNote;
+  memories[0].backNote = '那天的晚风，我一直记得。';
+  t.after(() => { memories[0].backNote = originalNote; });
+  const view = await mount('MemoryFilm');
+  t.after(() => { view.app.unmount(); frames.clear(); });
+  const photo = view.one('film-photo');
+  photo.props.onClick({ detail: 0 }); await nextTick();
+  assert.equal(photo.props['aria-pressed'], true);
+  assert.equal(text(view.one('film-back-note')), memories[0].backNote);
+  assert.match(text(view.one('film-hint')), /已暂停/);
+  for (let time = 0; time <= 12000; time += 50) await advance(time);
+  assert.equal(view.one('film-rail').scrollLeft, 0, 'reading the back must never advance the film');
+  photo.props.onClick({ detail: 0 }); await nextTick();
+  assert.equal(photo.props['aria-pressed'], false);
+  for (let time = 12050; time <= 20000; time += 50) await advance(time);
+  assert.ok(view.one('film-rail').scrollLeft > 0, 'autoplay resumes after returning to the front');
+});
+
+test('flipping back preserves a manual pause, and navigation closes the back', async t => {
+  const view = await mount('MemoryFilm');
+  t.after(() => { view.app.unmount(); frames.clear(); });
+  const controls = all(view.one('film-controls'), node => node.tag === 'button');
+  const photo = view.one('film-photo');
+  controls[1].props.onClick(); await nextTick();
+  photo.props.onClick({ detail: 0 }); await nextTick();
+  photo.props.onClick({ detail: 0 }); await nextTick();
+  for (let time = 0; time <= 8000; time += 50) await advance(time);
+  assert.equal(view.one('film-rail').scrollLeft, 0);
+  assert.equal(controls[1].props['aria-label'], '继续自动放映');
+  photo.props.onClick({ detail: 0 }); await nextTick();
+  controls[2].props.onClick(); await nextTick();
+  assert.equal(photo.props['aria-pressed'], false);
+  assert.equal(view.one('film-rail').scrollLeft, 276);
+  const currentPhoto = all(view.root, node => hasClass(node, 'film-photo'))[1];
+  currentPhoto.props.onClick({ detail: 0 }); await nextTick();
+  assert.equal(currentPhoto.props['aria-pressed'], true);
+  controls[1].props.onClick(); await nextTick();
+  assert.equal(currentPhoto.props['aria-pressed'], false);
+  assert.equal(controls[1].props['aria-label'], '暂停自动放映');
+});
+
+test('a swipe does not flip a photo, while a small tap does', async t => {
+  const view = await mount('MemoryFilm');
+  t.after(() => { view.app.unmount(); frames.clear(); });
+  const rail = view.one('film-rail');
+  rail.props.onPointerdown({ isPrimary: true, button: 0, pointerId: 1, clientX: 300 });
+  rail.props.onPointermove({ pointerId: 1, clientX: 24 });
+  rail.props.onPointerup({ pointerId: 1 }); await nextTick();
+  const photo = all(view.root, node => hasClass(node, 'film-photo'))[1];
+  photo.props.onClick({ detail: 1 }); await nextTick();
+  assert.equal(photo.props['aria-pressed'], false);
+  rail.props.onPointerdown({ isPrimary: true, button: 0, pointerId: 2, clientX: 200 });
+  rail.props.onPointermove({ pointerId: 2, clientX: 198 });
+  rail.props.onPointerup({ pointerId: 2 });
+  photo.props.onClick({ detail: 1 }); await nextTick();
+  assert.equal(photo.props['aria-pressed'], true);
+  assert.equal(rail.scrollLeft, 276);
 });
 
 test("the film pauses, can be dragged, and closes with light without duplicating photos", async () => {
