@@ -27,7 +27,7 @@ const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const EXIT_DURATION = reducedMotion ? 320 : 2000;
 let disposed = false;
 let frame = 0, last = null, phase = "hold", dwell = 0, resumeAt = 0, exitElapsed = 0;
-let pointer = null, pointerX = 0, pointerScroll = 0;
+let pointer = null, pointerTarget = null, pointerX = 0, pointerScroll = 0;
 let pointerMoved = false;
 const DWELL = 3400;
 
@@ -126,6 +126,10 @@ function pointerDown(event) {
   pointerScroll = rail.value.scrollLeft;
   pointerMoved = false;
   dragging.value = true;
+  // Keep capture on the tapped button so native clicks still flip it. Do not
+  // transfer capture mid-swipe: touch devices would emit lostpointercapture.
+  pointerTarget = event.target?.closest?.('.film-photo') || rail.value;
+  pointerTarget.setPointerCapture(event.pointerId);
 }
 function pointerMove(event) {
   if (pointer !== event.pointerId) return;
@@ -133,7 +137,6 @@ function pointerMove(event) {
     if (Math.abs(event.clientX - pointerX) < 8) return;
     pointerMoved = true;
     flipped.value = null;
-    rail.value.setPointerCapture(event.pointerId);
   }
   rail.value.scrollLeft = pointerScroll + pointerX - event.clientX;
   updateActive();
@@ -142,7 +145,9 @@ function pointerUp(event) {
   if (pointer !== event.pointerId) return;
   pointer = null;
   dragging.value = false;
-  if (rail.value.hasPointerCapture(event.pointerId)) rail.value.releasePointerCapture(event.pointerId);
+  const target = pointerTarget;
+  pointerTarget = null;
+  if (target?.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
   if (pointerMoved) settle();
 }
 function pointerCancel(event) {
