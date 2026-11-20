@@ -17,6 +17,7 @@ const music = createMemoryFilmMusic();
 const musicOn = ref(false);
 const musicHint = ref(false);
 let musicRequest = 0;
+let wishesRevision = 0;
 
 async function startMusic() {
   const request = ++musicRequest;
@@ -54,10 +55,12 @@ function presentError(error) {
 
 async function refreshWishes() {
   if (!wishesApiConfigured) return;
+  const revision = wishesRevision;
   loading.value = true;
   loadError.value = "";
   try {
-    wishes.value = await fetchWishes();
+    const rows = await fetchWishes();
+    if (revision === wishesRevision) wishes.value = rows;
   } catch (error) {
     loadError.value = presentError(error);
   } finally {
@@ -77,9 +80,10 @@ async function sendWish() {
   submitError.value = "";
   status.value = "正在把祝福送往星河…";
   try {
-    const wish = await submitWish(content);
-    if (wish) wishes.value = [wish, ...wishes.value.filter(item => item.id !== wish.id)].slice(0, 100);
-    else await refreshWishes();
+    await submitWish(content);
+    wishesRevision++;
+    const id = globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    wishes.value = [{ id, content, created_at: new Date().toISOString() }, ...wishes.value].slice(0, 100);
     message.value = "";
     status.value = "祝福已送达，所有来访者都能看见。";
   } catch (error) {

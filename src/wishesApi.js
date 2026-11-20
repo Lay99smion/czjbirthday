@@ -36,10 +36,9 @@ export async function submitWish(content) {
     method: "POST",
     headers: apiHeaders({
       "Content-Type": "application/json",
-      Prefer: "return=representation",
+      Prefer: "return=minimal",
     }),
     body: JSON.stringify({ content }),
   });
-  const rows = await readResponse(response);
-  return rows?.[0];
+  await readResponse(response);
 }
