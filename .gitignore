@@ -4,3 +4,6 @@ dist
 *.log
 assets/originals/
 public/memories/
+.env
+.env.*
+!.env.example

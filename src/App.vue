@@ -5,7 +5,9 @@ import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
 import { createFireworks } from "./fireworks";
 import { createBirthdayMusic } from "./birthdayMusic";
+import { createMemoryFilmMusic } from "./memoryFilmMusic";
 import MemoryFilm from "./components/MemoryFilm.vue";
+import WishWall from "./components/WishWall.vue";
 import GiftLetter from "./components/GiftLetter.vue";
 import StarCollection from "./components/StarCollection.vue";
 import WishSky from "./components/WishSky.vue";
@@ -22,9 +24,12 @@ import {
 } from "./puzzle";
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "love";
+const WISH_PAGE = new URLSearchParams(location.search).get("page") === "wishes";
 const birthdayName = "陈照敬";
 const birthdayDate = "1月10日";
+const wishWallUrl = `${assetUrl("")}?page=wishes`;
 const birthdayMusic = createBirthdayMusic();
+const memoryFilmMusic = createMemoryFilmMusic();
 const stage = ref("cover");
 const opened = ref(false);
 const isOpening = ref(false);
@@ -242,27 +247,52 @@ function onOrientation(event) {
 
 function startMusic() {
   if (disposing || !soundOn.value || letterAudioActive.value || document.hidden) return;
-  birthdayMusic.start().catch(() => {
-    soundOn.value = false;
-  });
+  if (stage.value === "main") {
+    birthdayMusic.pause();
+    memoryFilmMusic.start().catch(onMusicError);
+  } else {
+    memoryFilmMusic.pause();
+    birthdayMusic.start().catch(onMusicError);
+  }
+}
+
+function onMusicError() {
+  soundOn.value = false;
+  birthdayMusic.pause();
+  memoryFilmMusic.pause();
 }
 
 function onLetterAudio(active) {
   if (letterAudioActive.value === active) return;
   letterAudioActive.value = active;
-  if (active) birthdayMusic.pause();
+  if (active) {
+    birthdayMusic.pause();
+    memoryFilmMusic.pause();
+  }
   else if (opened.value) startMusic();
 }
 
 function toggleMusic() {
   soundOn.value = !soundOn.value;
-  if (soundOn.value) startMusic();
-  else birthdayMusic.pause();
+  if (soundOn.value) {
+    if (stage.value !== "main") memoryFilmMusic.unlock();
+    startMusic();
+  } else {
+    birthdayMusic.pause();
+    memoryFilmMusic.pause();
+  }
 }
+
+watch(stage, () => {
+  if (stage.value === "main") birthdayMusic.pause();
+  else memoryFilmMusic.pause();
+  if (opened.value && soundOn.value && !letterAudioActive.value && !document.hidden) startMusic();
+}, { flush: "post" });
 
 async function openEnvelope() {
   if (isOpening.value || opened.value) return;
   isOpening.value = true;
+  if (soundOn.value) memoryFilmMusic.unlock();
   startMusic(); // Called directly from the first tap for iOS/WeChat audio policy.
   requestOrientation(); // iOS permission prompt must originate from a tap.
   gsap
@@ -342,6 +372,7 @@ function restartExperience() {
   cancelAnimationFrame(frame);
   frame = 0;
   birthdayMusic.reset();
+  memoryFilmMusic.reset();
   stage.value = "cover";
   opened.value = false;
   isOpening.value = false;
@@ -655,6 +686,7 @@ function onVisibility() {
     cancelAnimationFrame(micFrame);
     micFrame = 0;
     birthdayMusic.pause();
+    memoryFilmMusic.pause();
     if (micState.value === "listening") stopMicrophone();
   } else {
     warpEffect?.resume();
@@ -666,7 +698,7 @@ function onVisibility() {
 }
 
 onMounted(() => {
-  if (!SECRET) preloadMemoryPhotos();
+  if (!SECRET && !WISH_PAGE) preloadMemoryPhotos();
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("resize", resizeStars, { passive: true });
 });
@@ -686,11 +718,14 @@ onBeforeUnmount(() => {
   stars?.material.dispose();
   renderer?.dispose();
   birthdayMusic.dispose();
+  memoryFilmMusic.dispose();
 });
 </script>
 
 <template>
+  <WishWall v-if="WISH_PAGE" :home-href="assetUrl('')" />
   <main
+    v-else
     ref="shell"
     class="app-shell"
     :class="{ 'memory-transition': memoryTransitionActive }"
@@ -734,13 +769,15 @@ onBeforeUnmount(() => {
         </button>
         <small class="moon-whisper">1，2，3，4，5 · 月光里，也许藏着一点秘密</small>
         <div class="topbar-center"><span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span></div>
+        <a class="wish-wall-nav-link" :href="wishWallUrl">祝福墙</a>
         <button
           class="icon-button sound-button"
           type="button"
           :aria-label="soundOn ? '关闭音乐' : '开启音乐'"
+          :aria-pressed="soundOn"
           @click="toggleMusic"
         >
-          {{ soundOn ? "♫" : "♪" }}<i v-if="!soundOn" class="sound-slash"></i>
+          ♫<i v-if="!soundOn" class="sound-slash" aria-hidden="true"></i>
         </button>
       </header>
 
@@ -774,6 +811,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="cover-bottom">
           <span>轻触，开启这场小小的宇宙漫游</span>
+          <a :href="wishWallUrl">写一份祝福 <span>↗</span></a>
         </div>
       </section>
 

@@ -19,6 +19,7 @@ GitHub Pages 构建：`npm run build:pages`，部署基路径为 `/czjbirthday/`
 - 时光胶片的源图使用 `public/time1.webp` 到 `time14.webp`，按数字 1→14 播放。开发和构建时会自动生成 `public/memories/time1.webp` 到 `time14.webp`，供胶片展示：保留方向与宽高比，最长边 960px，14 张合计约 880 KiB。生成目录不提交 Git，替换源图后运行 `npm run photos:prepare` 可单独刷新。横图和竖图均完整显示，照片备注使用更大的浅金文字和深色衬底。原始 JPG 备份在 `assets/originals/time-photos/`，不随站点发布。
 - 月亮彩蛋相册使用 `public/pic1.webp`、`pic2.webp`、`pic3.webp`；拼图仍使用 `pic2.webp`。
 - 在 `src/memories.js` 的 `memories` 数组里修改时光胶片的顺序及每帧 `caption` 备注；每张照片的文案均位于对应条目的 `caption`，可继续逐张调整。月亮彩蛋相册使用同文件中的 `albumPhotos`。
+- 封面与顶栏可打开独立祝福墙（`?page=wishes`）。页面尝试播放 `public/birthday.mp3`，并提供音乐开关；若浏览器拦截自动播放，可点音符启动。页面通过 Supabase Data API 读取和提交公开祝福，展示最近 100 条。先在 Supabase SQL Editor 运行 `supabase/wishes.sql`，再复制 `.env.example` 为 `.env.local` 并填入项目 URL 和 Publishable Key。本地运行和 GitHub Pages 构建时都需要这些 `VITE_` 配置；它们会进入前端包，所以只能放公开 Publishable Key，不能放数据库密码或 Secret Key。匿名祝福会公开显示，RLS 仅允许读取和新增，不能更新或删除。
 - 回忆胶片支持轻点当前照片翻面，再点一次翻回；背面的一句话位于 `src/memories.js` 每张照片的 `backNote`，可逐张填写或修改，支持 `\n` 换行。留空时显示「有一句话，想慢慢写给你。」阅读背面会暂停自动放映，翻回正面后重新计时；原本手动暂停的状态会保留。左右拖动及方向键仍可翻页，翻页时回到照片正面。减少动态效果模式下直接切换正反面。
 - 照片使用 WebP 格式，建议每张小于 200KB。月亮相册支持左右滑动、点按照片和左右箭头翻页。
 - 封面出现后就会预加载胶片照片，优先前两张，复用相同图片地址的缓存；图片节点仍在穿梭结束后才挂载。胶片不使用浏览器懒加载，自动放映会等当前照片解码完成才开始计时，也会等下一张准备好才移动。慢网时显示加载提示，失败时可以点击「重新加载」，也可以手动翻看其他照片。
@@ -35,6 +36,6 @@ GitHub Pages 构建：`npm run build:pages`，部署基路径为 `/czjbirthday/`
 - 在最后一页的心愿框输入“杨炼”并回车（或点箭头）可触发隐藏彩蛋：小鸟衔着信封飞近，停住后可以点开信封。信件内容暂留占位，之后在 `src/secretLetter.js` 的 `content` 填写正文；`keyword` 和 `title` 也在同一文件。彩蛋可关闭并再次触发，其他心愿仍正常升空。
 - 结尾可以点「从头再看一遍」回到封面，蜡烛和拼图会重置。月亮彩蛋在顶栏留有一句轻提示。
 
-背景音乐为 Web Audio 演奏的《生日快乐》八音盒旋律，只有点击信封后才开始播放，页面隐藏时暂停；不请求外部音频文件。陀螺仪视差在设备支持且授权时启用；麦克风吹气需要 HTTPS 和用户主动授权，长按按钮始终可用。
+只有时光胶片页播放 `public/birthday.mp3`；其他场景保留 Web Audio 演奏的《生日快乐》八音盒旋律。点击信封后启用背景音乐，页面隐藏时暂停，顶栏音乐按钮统一控制开关；界面互动音效仍由 Web Audio 演奏。陀螺仪视差在设备支持且授权时启用；麦克风吹气需要 HTTPS 和用户主动授权，长按按钮始终可用。
 
 运行 `npm run build` 准备轻量照片并生成生产版本。明暗氛围切换按本次要求暂不加入。
