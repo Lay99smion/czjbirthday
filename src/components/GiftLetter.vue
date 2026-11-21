@@ -30,14 +30,16 @@ const gesturePrompt = computed(() => {
   if (dragProgress.value >= 1) return "松开，收下一点惊喜";
   return prompt.value;
 });
-const foil = Array.from({ length: 25 }, (_, i) => ({
-  "--x": `${Math.random() * 100}%`,
-  "--delay": `${-Math.random() * 9}s`,
-  "--duration": `${5 + Math.random() * 6}s`,
-  "--drift": `${-50 + Math.random() * 100}px`,
-  "--spin": `${-400 + Math.random() * 800}deg`,
-  "--size": `${3 + Math.random() * 5}px`,
-  "--color": i % 3 === 0 ? "#c997ac" : "#e8cb87",
+const birthdaySprinkles = Array.from({ length: 25 }, (_, i) => ({
+  glyph: i % 2 === 0 ? "🎂" : "⭐️",
+  style: {
+    "--x": `${3 + Math.random() * 90}%`,
+    "--delay": `${-Math.random() * 9}s`,
+    "--duration": `${5 + Math.random() * 6}s`,
+    "--drift": `${-25 + Math.random() * 50}px`,
+    "--spin": `${-35 + Math.random() * 70}deg`,
+    "--size": `${14 + Math.random() * 8}px`,
+  },
 }));
 let layerTimer,
   typingFrame = 0,
@@ -204,8 +206,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="falling-foil" aria-hidden="true">
-    <i v-for="(style, i) in foil" :key="i" :style="style"></i>
+  <div class="birthday-sprinkles" aria-hidden="true">
+    <span
+      v-for="(sprinkle, i) in birthdaySprinkles"
+      :key="i"
+      :style="sprinkle.style"
+      >{{ sprinkle.glyph }}</span
+    >
   </div>
   <div class="letter-balloons parallax-mid" aria-hidden="true">
     <i></i><i></i><i></i>

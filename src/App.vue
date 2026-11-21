@@ -1024,8 +1024,10 @@ onBeforeUnmount(() => {
             key="ending"
             class="scene-page ending-page"
           >
-            <div class="heart-rain" aria-hidden="true">
-              <span v-for="n in 15" :key="n" :style="{ '--i': n }">♥</span>
+            <div class="birthday-rain" aria-hidden="true">
+              <span v-for="n in 15" :key="n" :style="{ '--i': n }">{{
+                n % 2 ? "🎂" : "⭐️"
+              }}</span>
             </div>
             <div class="stage-content ending-content">
               <div class="ending-icon">✦</div>
