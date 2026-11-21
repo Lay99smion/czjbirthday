@@ -1,6 +1,6 @@
 export const TICKET_WIDTH = 900;
 export const TICKET_HEIGHT = 1560;
-export const TICKET_WISH_LIMIT = 80;
+export const TICKET_WISH_LIMIT = 10;
 
 const escapeXml = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char]);
 const segments = value => typeof Intl.Segmenter === 'function'
@@ -8,40 +8,26 @@ const segments = value => typeof Intl.Segmenter === 'function'
   : Array.from(value);
 
 export function normalizeTicketWish(value) {
-  return String(value || '').replace(/\r\n?/g, '\n').trim();
+  return String(value || '').replace(/\r\n?|\n/g, ' ').trim();
 }
 
-// Conservative character widths keep Chinese, emoji and unbroken Latin words
-// inside the printed area. Preserve intentional line breaks.
-export function ticketWishLines(value) {
-  const lines = [];
-  for (const paragraph of normalizeTicketWish(value).split('\n')) {
-    let line = '', width = 0;
-    for (const char of segments(paragraph)) {
-      const advance = /^[MW@#%&]$/.test(char) ? 1 : /^[mw]$/.test(char) ? .9 : /^[A-Z]$/.test(char) ? .8 : /^[\x20-\x7e]+$/.test(char) ? .65 : 1;
-      if (width + advance > 21 && line) {
-        lines.push(line.trimEnd());
-        line = ''; width = 0;
-      }
-      line += char;
-      width += advance;
-    }
-    lines.push(line.trimEnd());
-  }
-  return lines;
+export function ticketWishLength(value) {
+  return segments(String(value || '')).length;
+}
+
+export function clampTicketWish(value) {
+  return segments(String(value || '').replace(/\r\n?|\n/g, ' ')).slice(0, TICKET_WISH_LIMIT).join('');
 }
 
 export function ticketWishError(value) {
   const text = normalizeTicketWish(value);
   if (!text) return '先写一句生日心愿，再生成纪念票。';
-  if (segments(text).length > TICKET_WISH_LIMIT) return '心愿最多写 80 个字，请稍微缩短一点。';
-  if (ticketWishLines(text).length > 4) return '心愿最多放 4 行，合并一些换行再试试。';
+  if (ticketWishLength(text) > TICKET_WISH_LIMIT) return `心愿最多写 ${TICKET_WISH_LIMIT} 个字，请稍微缩短一点。`;
   return '';
 }
 
 export function createTicketSvg({ name, date, wish, photoDataUrl = '' }) {
   const text = normalizeTicketWish(wish);
-  const lines = (text ? ticketWishLines(text) : ['把今年的心愿，写在这里。']).slice(0, 4);
   const dateCode = String(date).match(/\d+/g)?.map(number => number.padStart(2, '0')).join('') || '0110';
   const barcode = Array.from({ length: 58 }, (_, i) => `<rect x="${96 + i * 6}" y="1402" width="${i % 4 === 0 ? 4 : i % 3 === 0 ? 3 : 1.5}" height="42"/>`).join('');
   const photo = photoDataUrl
@@ -64,8 +50,8 @@ export function createTicketSvg({ name, date, wish, photoDataUrl = '' }) {
     <text x="150" y="1082" font-size="14" letter-spacing="2.7" fill="#997c55">LITTLE MOMENTS, FOREVER</text>
     <path d="M94 1120H127M110.5 1103.5V1136.5" stroke="#a47d49" stroke-width="1.5"/>
     <text x="145" y="1128" font-size="18" letter-spacing="2" fill="#8c6a42">生日心愿 / MY WISH</text>
-    <g font-family="'Songti SC','PingFang SC',serif" font-size="31" fill="${text ? '#493b32' : '#ab9678'}">
-      ${lines.map((line, i) => `<text x="96" y="${1184 + i * 43}">${escapeXml(line)}</text>`).join('')}
+    <g font-family="'Songti SC','PingFang SC',serif" font-size="52" letter-spacing="3" fill="${text ? '#493b32' : '#ab9678'}">
+      <text x="450" y="1242" text-anchor="middle" dominant-baseline="central">${escapeXml(text || '写下你的生日心愿')}</text>
     </g>
     <path d="M64 1356H836" stroke="#b4956b" stroke-dasharray="8 10"/>
     <circle cx="32" cy="1356" r="19" fill="#10192b"/><circle cx="868" cy="1356" r="19" fill="#10192b"/>

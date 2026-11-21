@@ -1,6 +1,9 @@
+import { WISH_LIMIT } from "./wishesCollection";
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, "");
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 const wishesEndpoint = supabaseUrl ? `${supabaseUrl}/rest/v1/wishes` : "";
+const wishFields = "id,content,created_at,is_pinned";
 
 export const wishesApiConfigured = Boolean(supabaseUrl && publishableKey);
 
@@ -24,7 +27,7 @@ async function readResponse(response) {
 
 export async function fetchWishes() {
   if (!wishesApiConfigured) throw new Error("Supabase 配置尚未完成。");
-  const response = await fetch(`${wishesEndpoint}?select=id,content,created_at&order=created_at.desc&limit=100`, {
+  const response = await fetch(`${wishesEndpoint}?select=${wishFields}&order=is_pinned.desc,created_at.desc,id.desc&limit=${WISH_LIMIT}`, {
     headers: apiHeaders(),
   });
   return readResponse(response);
@@ -32,13 +35,14 @@ export async function fetchWishes() {
 
 export async function submitWish(content) {
   if (!wishesApiConfigured) throw new Error("Supabase 配置尚未完成。");
-  const response = await fetch(wishesEndpoint, {
+  const response = await fetch(`${wishesEndpoint}?select=${wishFields}`, {
     method: "POST",
     headers: apiHeaders({
       "Content-Type": "application/json",
-      Prefer: "return=minimal",
+      Prefer: "return=representation",
     }),
     body: JSON.stringify({ content }),
   });
-  await readResponse(response);
+  const rows = await readResponse(response);
+  return rows[0];
 }

@@ -211,7 +211,6 @@ onBeforeUnmount(() => {
     <i></i><i></i><i></i>
   </div>
   <div class="stage-content letter-content">
-    <span class="section-kicker">A LETTER JUST FOR YOU</span>
     <h2>
       写给<span>{{ name }}</span>
     </h2>

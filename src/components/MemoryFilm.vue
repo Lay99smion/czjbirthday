@@ -211,7 +211,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="memory-content" :class="{ departing: dissolving, paused: props.paused }" :style="{ '--memory-exit-duration': `${EXIT_DURATION}ms` }">
     <div class="memory-film-ui" :inert="dissolving" :aria-hidden="dissolving || undefined">
-      <span class="section-kicker">LITTLE MOMENTS, FOREVER</span>
       <h2>把时光，<em>慢慢放映。</em></h2>
       <p class="memory-intro">那些闪闪发光的瞬间，都在这里。</p>
       <div ref="rail" class="film-rail" :class="{ dragging }" tabindex="0" role="region" aria-label="回忆照片胶片，可左右拖动或按方向键"

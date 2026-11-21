@@ -1,5 +1,13 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { gsap } from "gsap";
 import confetti from "canvas-confetti";
 import { createWarpField } from "./warp";
@@ -10,7 +18,7 @@ import MemoryFilm from "./components/MemoryFilm.vue";
 import WishWall from "./components/WishWall.vue";
 import GiftLetter from "./components/GiftLetter.vue";
 import StarCollection from "./components/StarCollection.vue";
-import WishSky from "./components/WishSky.vue";
+import SecretNote from "./components/SecretNote.vue";
 import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
 import { albumPhotos as photos } from "./memories";
@@ -23,11 +31,13 @@ import {
   swapPuzzleTiles,
 } from "./puzzle";
 
-const SECRET = new URLSearchParams(location.search).get("secret") === "love";
+const SECRET = new URLSearchParams(location.search).get("secret") === "yl";
+const SecretRoom = defineAsyncComponent(() => import("./components/SecretRoom.vue"));
 const WISH_PAGE = new URLSearchParams(location.search).get("page") === "wishes";
 const birthdayName = "陈照敬";
 const birthdayDate = "1月10日";
 const wishWallUrl = `${assetUrl("")}?page=wishes`;
+const warpCharacterUrl = assetUrl("/labixiaoxin.png");
 const birthdayMusic = createBirthdayMusic();
 const memoryFilmMusic = createMemoryFilmMusic();
 const stage = ref("cover");
@@ -101,21 +111,35 @@ function returnFromTicket() {
 }
 const celebrationCalls = new Set();
 function later(seconds, callback) {
-  const call = gsap.delayedCall(seconds, () => { celebrationCalls.delete(call); callback(); });
+  const call = gsap.delayedCall(seconds, () => {
+    celebrationCalls.delete(call);
+    callback();
+  });
   celebrationCalls.add(call);
   return call;
 }
-function clearCelebration() { celebrationCalls.forEach(call => call.kill()); celebrationCalls.clear(); }
-function playUiSound(kind) { if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind); }
+function clearCelebration() {
+  celebrationCalls.forEach((call) => call.kill());
+  celebrationCalls.clear();
+}
+function playUiSound(kind) {
+  if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind);
+}
 function onPointerMove(event) {
-  if (memoryTransitionActive.value || event.pointerType === "touch" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  tiltX = (event.clientX / innerWidth - .5) * 2;
-  tiltY = (event.clientY / innerHeight - .5) * 2;
+  if (
+    memoryTransitionActive.value ||
+    event.pointerType === "touch" ||
+    matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+    return;
+  tiltX = (event.clientX / innerWidth - 0.5) * 2;
+  tiltY = (event.clientY / innerHeight - 0.5) * 2;
   shell.value?.style.setProperty("--px", `${tiltX * 7}px`);
   shell.value?.style.setProperty("--py", `${tiltY * 5}px`);
 }
 function resetParallax() {
-  tiltX = 0; tiltY = 0;
+  tiltX = 0;
+  tiltY = 0;
   shell.value?.style.setProperty("--px", "0px");
   shell.value?.style.setProperty("--py", "0px");
 }
@@ -123,7 +147,8 @@ function resetParallax() {
 async function initStars() {
   if (!starCanvas.value || SECRET) return;
   if (renderer) {
-    if (!frame && !document.hidden && !memoryTransitionActive.value) animateStars();
+    if (!frame && !document.hidden && !memoryTransitionActive.value)
+      animateStars();
     return;
   }
   try {
@@ -195,7 +220,7 @@ function animateStars() {
   renderer.render(scene, camera);
 }
 
-watch(memoryTransitionActive, active => {
+watch(memoryTransitionActive, (active) => {
   cancelAnimationFrame(frame);
   frame = 0;
   if (!active && renderer && !document.hidden && opened.value) animateStars();
@@ -246,7 +271,8 @@ function onOrientation(event) {
 }
 
 function startMusic() {
-  if (disposing || !soundOn.value || letterAudioActive.value || document.hidden) return;
+  if (disposing || !soundOn.value || letterAudioActive.value || document.hidden)
+    return;
   if (stage.value === "main") {
     birthdayMusic.pause();
     memoryFilmMusic.start().catch(onMusicError);
@@ -268,8 +294,7 @@ function onLetterAudio(active) {
   if (active) {
     birthdayMusic.pause();
     memoryFilmMusic.pause();
-  }
-  else if (opened.value) startMusic();
+  } else if (opened.value) startMusic();
 }
 
 function toggleMusic() {
@@ -283,11 +308,21 @@ function toggleMusic() {
   }
 }
 
-watch(stage, () => {
-  if (stage.value === "main") birthdayMusic.pause();
-  else memoryFilmMusic.pause();
-  if (opened.value && soundOn.value && !letterAudioActive.value && !document.hidden) startMusic();
-}, { flush: "post" });
+watch(
+  stage,
+  () => {
+    if (stage.value === "main") birthdayMusic.pause();
+    else memoryFilmMusic.pause();
+    if (
+      opened.value &&
+      soundOn.value &&
+      !letterAudioActive.value &&
+      !document.hidden
+    )
+      startMusic();
+  },
+  { flush: "post" },
+);
 
 async function openEnvelope() {
   if (isOpening.value || opened.value) return;
@@ -435,7 +470,7 @@ function onTouchStart(event) {
 }
 function onTouchEnd(event) {
   if (
-    event.target.closest?.(".letter-paper, .wish-form, .film-rail") ||
+    event.target.closest?.(".letter-paper, .secret-note, .film-rail") ||
     !opened.value ||
     photoOpen.value ||
     warpActive.value ||
@@ -615,6 +650,7 @@ function blowOut() {
   candleOut.value = true;
   stopHold();
   stopMicrophone();
+  playUiSound("blow");
   gsap.to(".flame", {
     opacity: 0,
     scale: 0,
@@ -623,7 +659,10 @@ function blowOut() {
     ease: "power2.out",
   });
   smokeVisible.value = true;
-  later(2.7, () => { smokeVisible.value = false; celebrate(); });
+  later(2.7, () => {
+    smokeVisible.value = false;
+    celebrate();
+  });
 }
 
 function celebrate() {
@@ -665,11 +704,15 @@ async function startFinaleFireworks() {
     fireworksActive.value = false;
     return;
   }
-  fireworksEffect = createFireworks(fireworksCanvas.value, () => {
-    fireworksEffect?.destroy();
-    fireworksEffect = null;
-    fireworksActive.value = false;
-  });
+  fireworksEffect = createFireworks(
+    fireworksCanvas.value,
+    () => {
+      fireworksEffect?.destroy();
+      fireworksEffect = null;
+      fireworksActive.value = false;
+    },
+    () => playUiSound("firework"),
+  );
   if (!document.hidden) fireworksEffect.start();
 }
 
@@ -698,7 +741,11 @@ function onVisibility() {
 }
 
 onMounted(() => {
-  if (!SECRET && !WISH_PAGE) preloadMemoryPhotos();
+  if (!SECRET && !WISH_PAGE) {
+    preloadMemoryPhotos();
+    const warpImage = new Image();
+    warpImage.src = warpCharacterUrl;
+  }
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("resize", resizeStars, { passive: true });
 });
@@ -737,20 +784,12 @@ onBeforeUnmount(() => {
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
 
-    <section v-if="SECRET" class="secret-page">
-      <div class="secret-spark">✦</div>
-      <div class="secret-card">
-        <span class="eyebrow">A LITTLE SECRET FOR YOU</span>
-        <div class="secret-heart">♥</div>
-        <h1>你是我藏在<br />星光里的秘密</h1>
-        <p>
-          如果今天的愿望有回音，<br />那一定是宇宙也在轻轻说：<br />{{ birthdayName }}，很高兴你来到这个世界。
-        </p>
-        <div class="secret-divider">✦ &nbsp; ✦ &nbsp; ✦</div>
-        <a :href="assetUrl('')" class="pill-button">返回生日夜空 <span>↗</span></a>
-      </div>
-      <p class="secret-footer">ONLY FOR YOU · WITH LOVE</p>
-    </section>
+    <SecretRoom
+      v-if="SECRET"
+      :name="birthdayName"
+      :home-href="assetUrl('')"
+      :character-src="warpCharacterUrl"
+    />
 
     <template v-else>
       <canvas ref="starCanvas" class="star-canvas" aria-hidden="true"></canvas>
@@ -767,9 +806,13 @@ onBeforeUnmount(() => {
         >
           ☾
         </button>
-        <small class="moon-whisper">1，2，3，4，5 · 月光里，也许藏着一点秘密</small>
-        <div class="topbar-center"><span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span></div>
-        <a class="wish-wall-nav-link" :href="wishWallUrl">祝福墙</a>
+        <small class="moon-whisper">轻点五下 · 月光里，也许藏着一点秘密</small>
+        <div class="topbar-center">
+          <span class="topbar-label">A NIGHT FOR YOU <span>✦</span></span>
+        </div>
+        <a class="wish-wall-nav-link wish-wall-entry" :href="wishWallUrl"
+          >祝福墙</a
+        >
         <button
           class="icon-button sound-button"
           type="button"
@@ -785,11 +828,15 @@ onBeforeUnmount(() => {
         <div class="cover-stars" aria-hidden="true">✦ <span>✧</span> ✦</div>
         <div class="cover-content">
           <div class="cover-kicker">
-            <span class="line"></span> {{ birthdayDate }} · 写给{{ birthdayName }}的生日信
+            <span class="line"></span> {{ birthdayDate }} · 写给{{
+              birthdayName
+            }}的生日信
             <span class="line"></span>
           </div>
           <h1>今晚，<br /><em>有一束光</em>为你亮起</h1>
-          <p class="cover-subtitle">{{ birthdayName }}，把这份小小的惊喜送给你</p>
+          <p class="cover-subtitle">
+            {{ birthdayName }}，把这份小小的惊喜送给你
+          </p>
           <button
             class="envelope-wrap"
             type="button"
@@ -797,7 +844,10 @@ onBeforeUnmount(() => {
             @click="openEnvelope"
           >
             <span class="envelope-glow"></span>
-            <span class="envelope-letter"><span>TO {{ birthdayName }}</span><b>♡</b></span>
+            <span class="envelope-letter"
+              ><span>TO {{ birthdayName }}</span
+              ><b>♡</b></span
+            >
             <span class="envelope"
               ><span class="envelope-back"></span
               ><span class="envelope-flap"></span
@@ -811,17 +861,30 @@ onBeforeUnmount(() => {
         </div>
         <div class="cover-bottom">
           <span>轻触，开启这场小小的宇宙漫游</span>
-          <a :href="wishWallUrl">写一份祝福 <span>↗</span></a>
+          <a class="wish-wall-entry" :href="wishWallUrl"
+            >写一份祝福 <span>↗</span></a
+          >
         </div>
       </section>
 
       <template v-else>
         <section v-if="stage === 'main'" class="scene-page memory-page">
-          <MemoryFilm :paused="warpActive || warpLeaving || photoOpen" @departing="memoryTransitionActive = $event" @complete="goStage('letter')" />
+          <MemoryFilm
+            :paused="warpActive || warpLeaving || photoOpen"
+            @departing="memoryTransitionActive = $event"
+            @complete="goStage('letter')"
+          />
         </section>
 
         <section v-if="stage === 'letter'" class="scene-page letter-page">
-          <GiftLetter :name="birthdayName" :date="birthdayDate" @ready="letterReady = true" @sound="playUiSound" @voice="onLetterAudio" @next="goStage('puzzle')" />
+          <GiftLetter
+            :name="birthdayName"
+            :date="birthdayDate"
+            @ready="letterReady = true"
+            @sound="playUiSound"
+            @voice="onLetterAudio"
+            @next="goStage('puzzle')"
+          />
         </section>
 
         <section v-if="stage === 'puzzle'" class="scene-page puzzle-page">
@@ -879,13 +942,21 @@ onBeforeUnmount(() => {
             <div
               class="cake-art"
               role="img"
-              :aria-label="candleOut ? '蜡烛已熄灭，白烟正在升起的生日蛋糕' : '一块点着蜡烛的生日蛋糕'"
+              :aria-label="
+                candleOut
+                  ? '蜡烛已熄灭，白烟正在升起的生日蛋糕'
+                  : '一块点着蜡烛的生日蛋糕'
+              "
             >
               <div class="cake-spark s1">✧</div>
               <div class="cake-spark s2">✦</div>
               <div class="cake-spark s3">✧</div>
-              <div class="flame" :class="{ extinguished: candleOut }"><span></span></div>
-              <div v-if="smokeVisible" class="candle-smoke" aria-hidden="true"><i v-for="n in 6" :key="n" :style="{ '--i': n }"></i></div>
+              <div class="flame" :class="{ extinguished: candleOut }">
+                <span></span>
+              </div>
+              <div v-if="smokeVisible" class="candle-smoke" aria-hidden="true">
+                <i v-for="n in 6" :key="n" :style="{ '--i': n }"></i>
+              </div>
               <div class="wick"></div>
               <div class="candle"><i></i><i></i><i></i></div>
               <div class="cake-icing"><i></i><i></i><i></i><i></i><i></i></div>
@@ -932,39 +1003,75 @@ onBeforeUnmount(() => {
                   class="hold-fill"
                   :style="{ width: holdProgress + '%' }"
                 ></span
-                ><span class="hold-label">{{ candleOut ? "愿望已藏进这一缕白烟里" : "长按这里 2 秒吹灭蜡烛" }}</span>
+                ><span class="hold-label">{{
+                  candleOut ? "愿望已藏进这一缕白烟里" : "长按这里 2 秒吹灭蜡烛"
+                }}</span>
               </button>
             </div>
           </div>
         </section>
 
         <Transition name="finale-scene">
-        <StarCollection v-if="stage === 'stars' && !fireworksActive" key="stars" @sound="playUiSound" @complete="stage = 'ending'" />
+          <StarCollection
+            v-if="stage === 'stars' && !fireworksActive"
+            key="stars"
+            @sound="playUiSound"
+            @complete="stage = 'ending'"
+          />
 
-        <section v-else-if="stage === 'ending'" key="ending" class="scene-page ending-page">
-          <div class="heart-rain" aria-hidden="true">
-            <span v-for="n in 15" :key="n" :style="{ '--i': n }">♥</span>
-          </div>
-          <div class="stage-content ending-content">
-            <div class="ending-icon">✦</div>
-            <span class="section-kicker">YOUR WISH IS ON ITS WAY</span>
-            <h2>生日快乐🎂<br /><em>祝你永远18岁</em></h2>
-            <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
-            <div class="ending-line"></div>
-            <span class="ending-love">生日快乐，{{ birthdayName }} ♡</span>
-            <div class="ending-actions">
-              <button ref="ticketEntry" class="ticket-entry" type="button" @click="openBirthdayTicket">制作生日纪念票 <span>↗</span></button>
-              <button class="restart-button" type="button" @click="restartExperience">从头再看一遍 <span>↺</span></button>
+          <section
+            v-else-if="stage === 'ending'"
+            key="ending"
+            class="scene-page ending-page"
+          >
+            <div class="heart-rain" aria-hidden="true">
+              <span v-for="n in 15" :key="n" :style="{ '--i': n }">♥</span>
             </div>
-          </div>
-          <WishSky @secret="openSecretLetter" @wish="latestWish = $event" />
-          <footer>Made with <span>❤️</span> by Lay</footer>
-        </section>
+            <div class="stage-content ending-content">
+              <div class="ending-icon">✦</div>
+              <span class="section-kicker">YOUR WISH IS ON ITS WAY</span>
+              <h2>生日快乐🎂<br /><em>祝你永远18岁</em></h2>
+              <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
+              <div class="ending-line"></div>
+              <span class="ending-love">生日快乐，{{ birthdayName }}</span>
+              <SecretNote @secret="openSecretLetter" />
+              <div class="ending-actions">
+                <button
+                  ref="ticketEntry"
+                  class="ticket-entry"
+                  type="button"
+                  @click="openBirthdayTicket"
+                >
+                  制作生日纪念票 <span>↗</span>
+                </button>
+                <button
+                  class="restart-button"
+                  type="button"
+                  @click="restartExperience"
+                >
+                  从头再看一遍 <span>↺</span>
+                </button>
+              </div>
+            </div>
+            <footer>Made with <span>❤️</span> by Lay</footer>
+          </section>
         </Transition>
 
-        <BirthdayTicket v-if="stage === 'ticket'" :name="birthdayName" :date="birthdayDate" :photo="assetUrl('/time1.webp')" :initial-wish="latestWish" @wish="latestWish = $event" @back="returnFromTicket" />
+        <BirthdayTicket
+          v-if="stage === 'ticket'"
+          :name="birthdayName"
+          :date="birthdayDate"
+          :photo="assetUrl('/time1.webp')"
+          :initial-wish="latestWish"
+          @wish="latestWish = $event"
+          @back="returnFromTicket"
+        />
 
-        <nav v-if="!['ending', 'stars', 'ticket'].includes(stage)" class="step-nav" aria-label="页面进度">
+        <nav
+          v-if="!['ending', 'stars', 'ticket'].includes(stage)"
+          class="step-nav"
+          aria-label="页面进度"
+        >
           <span
             v-for="(item, i) in stageOrder"
             :key="item"
@@ -1034,10 +1141,18 @@ onBeforeUnmount(() => {
             aria-hidden="true"
           ></canvas>
           <div class="warp-vignette" aria-hidden="true"></div>
-          <div class="warp-copy">
-            <span>✦ &nbsp; A LITTLE UNIVERSE &nbsp; ✦</span
-            ><strong>正在穿越<br />{{ birthdayName }}的生日宇宙</strong
-            ><small>愿望已经出发</small>
+          <div class="warp-content">
+            <img
+              class="warp-character"
+              :src="warpCharacterUrl"
+              alt="小新陪你穿越生日星空"
+              decoding="async"
+            />
+            <div class="warp-copy">
+              <span>✦ &nbsp; A LITTLE UNIVERSE &nbsp; ✦</span
+              ><strong>正在穿越<br />{{ birthdayName }}的生日宇宙</strong
+              ><small>愿望已经出发</small>
+            </div>
           </div>
           <div class="warp-progress" aria-hidden="true"><i></i></div>
         </div>

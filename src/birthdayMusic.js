@@ -97,9 +97,73 @@ export function createBirthdayMusic() {
     nextNoteAt = 0;
   }
 
+  function trackEffect(source, ...nodes) {
+    sources.add(source);
+    source.onended = () => {
+      sources.delete(source);
+      source.disconnect();
+      for (const node of nodes) node.disconnect();
+    };
+  }
+
+  function playNoise(when, { duration, frequency, endFrequency, peak, attack = .008, type = "lowpass" }) {
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const filter = context.createBiquadFilter();
+    filter.type = type;
+    filter.Q.value = .65;
+    filter.frequency.setValueAtTime(frequency, when);
+    filter.frequency.exponentialRampToValueAtTime(endFrequency, when + duration);
+    const envelope = context.createGain();
+    envelope.gain.setValueAtTime(.0001, when);
+    envelope.gain.exponentialRampToValueAtTime(peak, when + attack);
+    envelope.gain.exponentialRampToValueAtTime(peak * .28, when + duration * .55);
+    envelope.gain.exponentialRampToValueAtTime(.0001, when + duration);
+    source.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(master);
+    trackEffect(source, filter, envelope);
+    source.start(when);
+    source.stop(when + duration);
+  }
+
+  function playFirework(when) {
+    // A rounded, percussive boom: low thump and body, with no high crackle or whistle.
+    playNoise(when, { duration: .42, frequency: 360, endFrequency: 120, peak: .65, attack: .005 });
+    for (const [frequency, peak, duration] of [[82, .44, .5], [123, .16, .32]]) {
+      const boom = context.createOscillator();
+      boom.type = "sine";
+      boom.frequency.setValueAtTime(frequency, when);
+      boom.frequency.exponentialRampToValueAtTime(frequency * .88, when + .18);
+      const envelope = context.createGain();
+      envelope.gain.setValueAtTime(.0001, when);
+      envelope.gain.exponentialRampToValueAtTime(peak, when + .008);
+      envelope.gain.exponentialRampToValueAtTime(peak * .35, when + .1);
+      envelope.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      boom.connect(envelope);
+      envelope.connect(master);
+      trackEffect(boom, envelope);
+      boom.start(when);
+      boom.stop(when + duration + .02);
+    }
+  }
+
   function effect(kind) {
     if (!context || context.state !== "running" || document.hidden) return;
     const when = context.currentTime;
+    if (kind === "blow") {
+      playNoise(when, { duration: .85, frequency: 1100, endFrequency: 420, peak: .5, attack: .12, type: "bandpass" });
+      return;
+    }
+    if (kind === "firework") {
+      playFirework(when);
+      return;
+    }
     const notes = {
       lid: [[60, 0], [67, .08]],
       ribbon: [[76, 0], [79, .06], [83, .12]],

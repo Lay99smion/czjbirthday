@@ -1,7 +1,7 @@
 export const FIREWORK_DURATION_MS = 3600;
 
 // Separate finale after the cake confetti: five small bursts, under 250 sparks.
-export function createFireworks(canvas, onComplete) {
+export function createFireworks(canvas, onComplete, onBurst = () => {}) {
   const ctx = canvas.getContext("2d", { alpha: false });
   const colors = ["#ffd77d", "#f4a5be", "#b7c9ff", "#fff1d1", "#e8a0a0"];
   const bursts = [
@@ -32,6 +32,7 @@ export function createFireworks(canvas, onComplete) {
   }
 
   function explode(burst) {
+    onBurst();
     const startX = burst.x * width;
     const startY = burst.y * height;
     for (let i = 0; i < 44; i++) {
