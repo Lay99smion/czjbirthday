@@ -19,6 +19,7 @@ import WishWall from "./components/WishWall.vue";
 import GiftLetter from "./components/GiftLetter.vue";
 import StarCollection from "./components/StarCollection.vue";
 import SecretNote from "./components/SecretNote.vue";
+import SecretRoomEntry from "./components/SecretRoomEntry.vue";
 import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
 import { albumPhotos as photos } from "./memories";
@@ -860,7 +861,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="cover-bottom">
-          <span>轻触，开启这场小小的宇宙漫游</span>
+          <SecretRoomEntry :disabled="isOpening" />
           <a class="wish-wall-entry" :href="wishWallUrl"
             >写一份祝福 <span>↗</span></a
           >
@@ -1036,7 +1037,10 @@ onBeforeUnmount(() => {
               <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
               <div class="ending-line"></div>
               <span class="ending-love">生日快乐，{{ birthdayName }}</span>
-              <SecretNote @secret="openSecretLetter" />
+              <div class="ending-secrets">
+                <SecretNote @secret="openSecretLetter" />
+                <SecretRoomEntry />
+              </div>
               <div class="ending-actions">
                 <button
                   ref="ticketEntry"
