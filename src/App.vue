@@ -19,7 +19,6 @@ import WishWall from "./components/WishWall.vue";
 import GiftLetter from "./components/GiftLetter.vue";
 import StarCollection from "./components/StarCollection.vue";
 import SecretNote from "./components/SecretNote.vue";
-import SecretRoomEntry from "./components/SecretRoomEntry.vue";
 import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
 import { albumPhotos as photos } from "./memories";
@@ -34,10 +33,13 @@ import {
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "yl";
 const SecretRoom = defineAsyncComponent(() => import("./components/SecretRoom.vue"));
+const BirthdayRadio = defineAsyncComponent(() => import("./components/BirthdayRadio.vue"));
 const WISH_PAGE = new URLSearchParams(location.search).get("page") === "wishes";
+const RADIO_PAGE = !SECRET && new URLSearchParams(location.search).get("page") === "radio";
 const birthdayName = "陈照敬";
 const birthdayDate = "1月10日";
 const wishWallUrl = `${assetUrl("")}?page=wishes`;
+const radioUrl = `${assetUrl("")}?page=radio`;
 const warpCharacterUrl = assetUrl("/labixiaoxin.png");
 const birthdayMusic = createBirthdayMusic();
 const memoryFilmMusic = createMemoryFilmMusic();
@@ -742,7 +744,7 @@ function onVisibility() {
 }
 
 onMounted(() => {
-  if (!SECRET && !WISH_PAGE) {
+  if (!SECRET && !WISH_PAGE && !RADIO_PAGE) {
     preloadMemoryPhotos();
     const warpImage = new Image();
     warpImage.src = warpCharacterUrl;
@@ -772,6 +774,7 @@ onBeforeUnmount(() => {
 
 <template>
   <WishWall v-if="WISH_PAGE" :home-href="assetUrl('')" />
+  <BirthdayRadio v-else-if="RADIO_PAGE" :home-href="assetUrl('')" />
   <main
     v-else
     ref="shell"
@@ -861,7 +864,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="cover-bottom">
-          <SecretRoomEntry :disabled="isOpening" />
+          <a class="radio-nav-entry" :href="radioUrl">小弟的生日电台 <span aria-hidden="true">✦</span></a>
           <a class="wish-wall-entry" :href="wishWallUrl"
             >写一份祝福 <span>↗</span></a
           >
@@ -1037,10 +1040,7 @@ onBeforeUnmount(() => {
               <p>新的一岁，平安、热烈、自由。<br />所有美好，都会如约而至。</p>
               <div class="ending-line"></div>
               <span class="ending-love">生日快乐，{{ birthdayName }}</span>
-              <div class="ending-secrets">
-                <SecretNote @secret="openSecretLetter" />
-                <SecretRoomEntry />
-              </div>
+              <SecretNote @secret="openSecretLetter" />
               <div class="ending-actions">
                 <button
                   ref="ticketEntry"
@@ -1059,7 +1059,10 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </div>
-            <footer>Made with <span>❤️</span> by Lay</footer>
+            <footer>
+              <a class="radio-ending-link" :href="radioUrl">还有一段信号，留给你 <span aria-hidden="true">✦</span></a>
+              <span>Made with ❤️ by Lay</span>
+            </footer>
           </section>
         </Transition>
 
