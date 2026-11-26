@@ -1,10 +1,10 @@
 // 每个频率对应一段祝福。之后只需填写 content，支持换行。
 // 可以继续添加频道，电台的调频范围会自动更新。
 export const radioBlessings = [
-  { frequency: "01.10", content: "生日快乐🎂，今天你最大" },
-  { frequency: "66.66", content: "动感超人,变身!祝你往后顺顺利利，快快乐乐" },
-  { frequency: "88.88", content: "动感光波——biu biu biu~祝你越来越有钱，暴富暴富" },
-  { frequency: "99.99", content: "" },
-  { frequency: "08.20", content: "祝你学习进步，金榜题名" },
-  { frequency: "09.29", content: "祝你财源滚滚，富贵吉祥" },
+  { frequency: "01.10", content: "愿你永远年轻，永远热泪盈眶，永远吃不胖，生日快乐！🎂" },
+  { frequency: "66.66", content: "不管几岁，快乐万岁！希望新的一岁里，你的笑容比今天还多，烦恼比今天还少。我一直在，生日快乐！🤗" },
+  { frequency: "88.88", content: "新的一岁，愿你被生活温柔以待，所有努力都有回报。✨" },
+  { frequency: "99.99", content: "祝你越来越有魅力，新的一岁，继续一起疯、一起笑、一起闯🍻" },
+  { frequency: "08.20", content: "愿你的每一天都如今天般特别，被爱包围，被幸福眷顾。生日快乐！🎉" },
+  { frequency: "09.29", content: "又升级了一个版本！愿你新版本bug更少，快乐更多，生日快乐！" },
 ];

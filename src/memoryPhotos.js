@@ -1,11 +1,12 @@
 import { memories } from './memories.js';
 
-// Warm the same URLs the film uses while the cover and star flight are showing.
+// Warm the film's first frames during the countdown, then the rest with the cake.
 // Keep image references so decoded photos can be reused by the slideshow.
 const preloaded = new Map();
-export function preloadMemoryPhotos() {
+export function preloadMemoryPhotos({ limit = memories.length } = {}) {
   if (typeof Image === 'undefined') return;
   for (const [index, photo] of memories.entries()) {
+    if (index >= limit) break;
     if (preloaded.has(photo.src)) continue;
     const image = new Image();
     image.decoding = 'async';

@@ -21,6 +21,8 @@ import StarCollection from "./components/StarCollection.vue";
 import SecretNote from "./components/SecretNote.vue";
 import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
+import BirthdayCountdown from "./components/BirthdayCountdown.vue";
+import { birthdayCountdownConfig, canAccessBirthday, resolveCountdownDeadline } from "./birthdayCountdown";
 import { albumPhotos as photos } from "./memories";
 import { preloadMemoryPhotos } from "./memoryPhotos";
 import { assetUrl } from "./assets";
@@ -33,17 +35,25 @@ import {
 
 const SECRET = new URLSearchParams(location.search).get("secret") === "yl";
 const SecretRoom = defineAsyncComponent(() => import("./components/SecretRoom.vue"));
+const loadCakeIntro = () => import("./components/CakeIntro.vue");
+const CakeIntro = defineAsyncComponent(loadCakeIntro);
 const BirthdayRadio = defineAsyncComponent(() => import("./components/BirthdayRadio.vue"));
 const WISH_PAGE = new URLSearchParams(location.search).get("page") === "wishes";
 const RADIO_PAGE = !SECRET && new URLSearchParams(location.search).get("page") === "radio";
+const HOME_RETURN_LINK = new URLSearchParams(location.search).get("page") === "home";
+const RETURNING_HOME = HOME_RETURN_LINK && performance.getEntriesByType("navigation")[0]?.type !== "reload";
 const birthdayName = "陈照敬";
 const birthdayDate = "1月10日";
 const wishWallUrl = `${assetUrl("")}?page=wishes`;
 const radioUrl = `${assetUrl("")}?page=radio`;
+const homeUrl = `${assetUrl("")}?page=home`;
 const warpCharacterUrl = assetUrl("/labixiaoxin.png");
 const birthdayMusic = createBirthdayMusic();
 const memoryFilmMusic = createMemoryFilmMusic();
-const stage = ref("cover");
+const birthdayDeadline = resolveCountdownDeadline(birthdayCountdownConfig);
+const birthdayUnlocked = ref(canAccessBirthday(birthdayDeadline));
+const stage = ref(birthdayUnlocked.value && RETURNING_HOME ? "cover" : "countdown");
+let birthdayGateTimer = null;
 const opened = ref(false);
 const isOpening = ref(false);
 const soundOn = ref(true);
@@ -75,6 +85,55 @@ const starCanvas = ref(null);
 const stageOrder = ["main", "letter", "puzzle", "cake"];
 const currentStep = computed(() => stageOrder.indexOf(stage.value));
 const placedCount = computed(() => countPlacedTiles(puzzleTiles.value));
+const openingImages = [];
+
+function prepareOpening() {
+  if (stage.value === "countdown") preloadMemoryPhotos({ limit: 4 });
+  else preloadMemoryPhotos();
+  for (const src of [warpCharacterUrl, assetUrl("/pic2.webp")]) {
+    const image = new Image();
+    image.decoding = "async";
+    image.fetchPriority = "low";
+    openingImages.push(image);
+    image.src = src;
+    image.decode?.().catch(() => {});
+  }
+  // Download scene code during the countdown; allocate WebGL only when it begins.
+  if (stage.value === "countdown") {
+    loadCakeIntro().catch(() => {});
+    import("./cakeIntroScene").catch(() => {});
+  }
+}
+
+function startCakeIntro() {
+  if (!enforceBirthdayGate()) return;
+  stage.value = "intro";
+  preloadMemoryPhotos();
+}
+
+function showBirthdayCover() {
+  if (!enforceBirthdayGate()) return;
+  stage.value = "cover";
+}
+
+function enforceBirthdayGate() {
+  if (canAccessBirthday(birthdayDeadline)) return true;
+  if (birthdayUnlocked.value) {
+    restartExperience();
+    stars?.geometry.dispose();
+    stars?.material.dispose();
+    renderer?.dispose();
+    renderer = scene = camera = stars = null;
+  }
+  birthdayUnlocked.value = false;
+  return false;
+}
+
+function finishBirthdayCountdown() {
+  if (!enforceBirthdayGate()) return;
+  birthdayUnlocked.value = true;
+  startCakeIntro();
+}
 
 let renderer,
   scene,
@@ -96,6 +155,7 @@ let heartTimer = null;
 let secretReturnFocus = null;
 let disposing = false;
 function openSecretLetter(input) {
+  if (!enforceBirthdayGate()) return;
   if (secretLetterOpen.value) return;
   secretReturnFocus = input;
   secretLetterOpen.value = true;
@@ -106,9 +166,11 @@ function restoreSecretFocus() {
   secretReturnFocus = null;
 }
 function openBirthdayTicket() {
+  if (!enforceBirthdayGate()) return;
   stage.value = "ticket";
 }
 function returnFromTicket() {
+  if (!enforceBirthdayGate()) return;
   stage.value = "ending";
   nextTick(() => ticketEntry.value?.focus({ preventScroll: true }));
 }
@@ -130,6 +192,7 @@ function playUiSound(kind) {
 }
 function onPointerMove(event) {
   if (
+    ["countdown", "intro"].includes(stage.value) ||
     memoryTransitionActive.value ||
     event.pointerType === "touch" ||
     matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -328,6 +391,7 @@ watch(
 );
 
 async function openEnvelope() {
+  if (!enforceBirthdayGate()) return;
   if (isOpening.value || opened.value) return;
   isOpening.value = true;
   if (soundOn.value) memoryFilmMusic.unlock();
@@ -362,6 +426,7 @@ async function openEnvelope() {
 }
 
 function goStage(next) {
+  if (!enforceBirthdayGate()) return;
   if (
     photoOpen.value ||
     warpActive.value ||
@@ -411,7 +476,7 @@ function restartExperience() {
   frame = 0;
   birthdayMusic.reset();
   memoryFilmMusic.reset();
-  stage.value = "cover";
+  stage.value = "countdown";
   opened.value = false;
   isOpening.value = false;
   letterAudioActive.value = false;
@@ -720,6 +785,7 @@ async function startFinaleFireworks() {
 }
 
 function onVisibility() {
+  enforceBirthdayGate();
   document.documentElement.classList.toggle("page-hidden", document.hidden);
   if (document.hidden) {
     warpEffect?.pause();
@@ -738,22 +804,30 @@ function onVisibility() {
     warpEffect?.resume();
     fireworksEffect?.resume();
     gsap.globalTimeline.resume();
-    if (renderer && !frame && stage.value !== "cover") animateStars();
+    if (renderer && !frame && !["cover", "intro", "countdown"].includes(stage.value)) animateStars();
     if (soundOn.value && opened.value) startMusic();
   }
 }
 
 onMounted(() => {
-  if (!SECRET && !WISH_PAGE && !RADIO_PAGE) {
-    preloadMemoryPhotos();
-    const warpImage = new Image();
-    warpImage.src = warpCharacterUrl;
+  // The return flag applies to this navigation only; refreshing starts the opening.
+  if (HOME_RETURN_LINK) {
+    const url = new URL(location.href);
+    url.searchParams.delete("page");
+    history.replaceState(history.state, "", url.href);
   }
+  if (!birthdayUnlocked.value || (!SECRET && !WISH_PAGE && !RADIO_PAGE)) {
+    prepareOpening();
+  }
+  birthdayGateTimer = setInterval(enforceBirthdayGate, 1000);
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("resize", resizeStars, { passive: true });
+  window.addEventListener("pageshow", enforceBirthdayGate);
+  window.addEventListener("popstate", enforceBirthdayGate);
 });
 onBeforeUnmount(() => {
   disposing = true;
+  clearInterval(birthdayGateTimer);
   warpEffect?.destroy();
   fireworksEffect?.destroy();
   heartTimer?.kill();
@@ -762,6 +836,8 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(holdFrame);
   stopMicrophone();
   window.removeEventListener("resize", resizeStars);
+  window.removeEventListener("pageshow", enforceBirthdayGate);
+  window.removeEventListener("popstate", enforceBirthdayGate);
   window.removeEventListener("deviceorientation", onOrientation);
   document.removeEventListener("visibilitychange", onVisibility);
   stars?.geometry.dispose();
@@ -773,8 +849,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WishWall v-if="WISH_PAGE" :home-href="assetUrl('')" />
-  <BirthdayRadio v-else-if="RADIO_PAGE" :home-href="assetUrl('')" />
+  <BirthdayCountdown v-if="!birthdayUnlocked" :name="birthdayName" :deadline="birthdayDeadline" @complete="finishBirthdayCountdown" />
+  <template v-else>
+  <WishWall v-if="WISH_PAGE" :home-href="homeUrl" />
+  <BirthdayRadio v-else-if="RADIO_PAGE" :home-href="homeUrl" />
   <main
     v-else
     ref="shell"
@@ -791,11 +869,22 @@ onBeforeUnmount(() => {
     <SecretRoom
       v-if="SECRET"
       :name="birthdayName"
-      :home-href="assetUrl('')"
+      :home-href="homeUrl"
       :character-src="warpCharacterUrl"
     />
 
     <template v-else>
+      <Transition name="countdown-opening">
+        <BirthdayCountdown v-if="stage === 'countdown'" :name="birthdayName" :deadline="birthdayDeadline" @complete="startCakeIntro" />
+      </Transition>
+      <Transition name="cake-opening">
+        <CakeIntro
+          v-if="stage === 'intro'"
+          :name="birthdayName"
+          :date="birthdayDate"
+          @complete="showBirthdayCover"
+        />
+      </Transition>
       <canvas ref="starCanvas" class="star-canvas" aria-hidden="true"></canvas>
       <div class="star-fallback" aria-hidden="true"></div>
       <div class="orbit orbit-one" aria-hidden="true"></div>
@@ -871,7 +960,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <template v-else>
+      <template v-else-if="!['countdown', 'intro'].includes(stage)">
         <section v-if="stage === 'main'" class="scene-page memory-page">
           <MemoryFilm
             :paused="warpActive || warpLeaving || photoOpen"
@@ -1218,4 +1307,5 @@ onBeforeUnmount(() => {
       </div>
     </template>
   </main>
+  </template>
 </template>
