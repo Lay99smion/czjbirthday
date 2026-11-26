@@ -57,6 +57,8 @@ let birthdayGateTimer = null;
 const opened = ref(false);
 const isOpening = ref(false);
 const soundOn = ref(true);
+const introSoundReady = ref(false);
+let introSoundRequest = 0;
 const letterAudioActive = ref(false);
 const photoOpen = ref(false);
 const memoryTransitionActive = ref(false);
@@ -107,6 +109,7 @@ function prepareOpening() {
 
 function startCakeIntro() {
   if (!enforceBirthdayGate()) return;
+  if (soundOn.value) unlockIntroSound();
   stage.value = "intro";
   preloadMemoryPhotos();
 }
@@ -187,8 +190,41 @@ function clearCelebration() {
   celebrationCalls.forEach((call) => call.kill());
   celebrationCalls.clear();
 }
-function playUiSound(kind) {
-  if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind);
+function playUiSound(kind, detail) {
+  if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind, detail);
+}
+
+async function unlockIntroSound() {
+  const request = ++introSoundRequest;
+  try {
+    const ready = await birthdayMusic.unlock();
+    if (request === introSoundRequest && !disposing && !document.hidden && soundOn.value)
+      introSoundReady.value = ready;
+  } catch {
+    if (request === introSoundRequest) introSoundReady.value = false;
+  }
+}
+
+function unlockIntroSoundFromGesture(event) {
+  if (
+    SECRET || WISH_PAGE || RADIO_PAGE || !soundOn.value || introSoundReady.value ||
+    !["countdown", "intro"].includes(stage.value) ||
+    event.target.closest?.(".intro-sound-button")
+  ) return;
+  unlockIntroSound();
+}
+
+function toggleIntroSound() {
+  if (soundOn.value && introSoundReady.value) {
+    introSoundRequest++;
+    soundOn.value = false;
+    introSoundReady.value = false;
+    birthdayMusic.pause();
+    return;
+  }
+  soundOn.value = true;
+  // Called directly from the button tap, before any await, for mobile browsers.
+  unlockIntroSound();
 }
 function onPointerMove(event) {
   if (
@@ -376,7 +412,8 @@ function toggleMusic() {
 
 watch(
   stage,
-  () => {
+  (next, previous) => {
+    if (previous === "intro") birthdayMusic.pause();
     if (stage.value === "main") birthdayMusic.pause();
     else memoryFilmMusic.pause();
     if (
@@ -788,6 +825,7 @@ function onVisibility() {
   enforceBirthdayGate();
   document.documentElement.classList.toggle("page-hidden", document.hidden);
   if (document.hidden) {
+    introSoundRequest++;
     warpEffect?.pause();
     fireworksEffect?.pause();
     gsap.globalTimeline.pause();
@@ -806,10 +844,17 @@ function onVisibility() {
     gsap.globalTimeline.resume();
     if (renderer && !frame && !["cover", "intro", "countdown"].includes(stage.value)) animateStars();
     if (soundOn.value && opened.value) startMusic();
+    else if (soundOn.value && !SECRET && !WISH_PAGE && !RADIO_PAGE && ["countdown", "intro"].includes(stage.value)) unlockIntroSound();
   }
 }
 
 onMounted(() => {
+  if (!SECRET && !WISH_PAGE && !RADIO_PAGE) {
+    // Autoplay when allowed; the first page gesture retries a blocked context.
+    unlockIntroSound();
+    for (const event of ["pointerdown", "touchend", "keydown"])
+      document.addEventListener(event, unlockIntroSoundFromGesture, { capture: true, passive: true });
+  }
   // The return flag applies to this navigation only; refreshing starts the opening.
   if (HOME_RETURN_LINK) {
     const url = new URL(location.href);
@@ -840,6 +885,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("popstate", enforceBirthdayGate);
   window.removeEventListener("deviceorientation", onOrientation);
   document.removeEventListener("visibilitychange", onVisibility);
+  for (const event of ["pointerdown", "touchend", "keydown"])
+    document.removeEventListener(event, unlockIntroSoundFromGesture, true);
   stars?.geometry.dispose();
   stars?.material.dispose();
   renderer?.dispose();
@@ -849,6 +896,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <button
+    v-if="!SECRET && !WISH_PAGE && !RADIO_PAGE && ['countdown', 'intro'].includes(stage)"
+    class="intro-sound-button"
+    type="button"
+    :aria-pressed="soundOn && introSoundReady"
+    @click.stop="toggleIntroSound"
+  >
+    <span aria-hidden="true">{{ soundOn && introSoundReady ? '♫' : '♪' }}</span>
+    {{ !soundOn ? '音效已关闭' : introSoundReady ? '音效已开启' : '轻点开启音效' }}
+  </button>
   <BirthdayCountdown v-if="!birthdayUnlocked" :name="birthdayName" :deadline="birthdayDeadline" @complete="finishBirthdayCountdown" />
   <template v-else>
   <WishWall v-if="WISH_PAGE" :home-href="homeUrl" />
@@ -883,6 +940,7 @@ onBeforeUnmount(() => {
           :name="birthdayName"
           :date="birthdayDate"
           @complete="showBirthdayCover"
+          @sound="playUiSound"
         />
       </Transition>
       <canvas ref="starCanvas" class="star-canvas" aria-hidden="true"></canvas>

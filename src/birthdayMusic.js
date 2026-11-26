@@ -61,9 +61,8 @@ export function createBirthdayMusic() {
     frame = requestAnimationFrame(tick);
   }
 
-  async function start() {
-    const request = ++playRequest;
-    // Construct and resume only in the user's tap handler.
+  async function unlock() {
+    // Unlock effects without starting the birthday song during the cake opening.
     if (!context) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) throw new Error("Web Audio is unavailable");
@@ -73,7 +72,12 @@ export function createBirthdayMusic() {
       master.connect(context.destination);
     }
     await context.resume();
-    if (request !== playRequest || document.hidden || running) return;
+    return context.state === "running";
+  }
+
+  async function start() {
+    const request = ++playRequest;
+    if (!await unlock() || request !== playRequest || document.hidden || running) return;
     nextNoteAt = Math.max(nextNoteAt, context.currentTime + .04);
     running = true;
     tick();
@@ -153,9 +157,24 @@ export function createBirthdayMusic() {
     }
   }
 
-  function effect(kind) {
+  function effect(kind, detail = 0) {
     if (!context || context.state !== "running" || document.hidden) return;
     const when = context.currentTime;
+    if (kind === "cake-rise") {
+      const midi = [60, 64, 67, 72, 76][detail];
+      if (midi === undefined) return;
+      // A soft bell rises with each tier, with a quieter octave above it.
+      playNote(midi, when, .62);
+      playNote(midi + 12, when + .13, .28);
+      return;
+    }
+    if (kind === "cake-star") {
+      // A brighter, longer shimmer marks the top star switching on.
+      for (const [index, midi] of [84, 88, 91, 96].entries()) {
+        playNote(midi, when + index * .085, 1.1 - index * .12);
+      }
+      return;
+    }
     if (kind === "blow") {
       playNoise(when, { duration: .85, frequency: 1100, endFrequency: 420, peak: .5, attack: .12, type: "bandpass" });
       return;
@@ -195,5 +214,5 @@ export function createBirthdayMusic() {
     context?.close();
   }
 
-  return { start, pause, reset, dispose, effect };
+  return { unlock, start, pause, reset, dispose, effect };
 }

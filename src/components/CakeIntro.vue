@@ -2,10 +2,11 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { cakeIntroFrame } from "../cakeIntroMotion";
 import { createCakeIntroFireworks } from "../cakeIntroFireworks";
+import { createCakeIntroSoundTrack } from "../cakeIntroSound";
 import { createNightSkyLayers } from "../nightSky";
 
 defineProps({ name: String, date: String });
-const emit = defineEmits(["complete"]);
+const emit = defineEmits(["complete", "sound"]);
 const canvas = ref(null);
 const fireworksCanvas = ref(null);
 const ready = ref(false);
@@ -13,6 +14,8 @@ const revealed = ref(false);
 const fallback = ref(false);
 const celebrating = ref(false);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const soundTrack = createCakeIntroSoundTrack((...cue) => emit("sound", ...cue), reducedMotion);
+const fallbackState = ref(cakeIntroFrame(0, 1, reducedMotion));
 const starLayers = createNightSkyLayers();
 let effect = null;
 let fireworks = null;
@@ -28,8 +31,9 @@ function complete() {
   emit("complete");
 }
 
-function updateFireworks(state) {
+function updateFrame(state) {
   if (disposed) return;
+  soundTrack.update(state);
   fireworks?.render(state.fireworksTime);
   if (state.fireworksTime >= 0 && !celebrating.value) celebrating.value = true;
 }
@@ -39,7 +43,8 @@ function tickFallback(now) {
   if (previous !== null) fallbackElapsed += Math.min((now - previous) / 1000, 0.08);
   previous = now;
   const state = cakeIntroFrame(fallbackElapsed, 1, reducedMotion);
-  updateFireworks(state);
+  fallbackState.value = state;
+  updateFrame(state);
   if (state.reveal) revealed.value = true;
   if (state.complete) complete();
   else fallbackFrame = requestAnimationFrame(tickFallback);
@@ -75,7 +80,7 @@ onMounted(async () => {
     effect = createCakeIntroScene(canvas.value, {
       reducedMotion,
       onReveal: () => { revealed.value = true; },
-      onFrame: updateFireworks,
+      onFrame: updateFrame,
       onComplete: complete,
       onError: useFallback,
     });
@@ -102,14 +107,14 @@ onBeforeUnmount(() => {
     <canvas ref="canvas" class="cake-intro-canvas" aria-hidden="true"></canvas>
     <div v-if="fallback" class="cake-intro-fallback" aria-hidden="true">
       <div class="intro-fallback-cake">
-        <div v-for="n in 5" :key="n" class="intro-fallback-tier" :style="{ '--tier': n }">
+        <div v-for="n in 5" :key="n" class="intro-fallback-tier" :style="{ '--tier': n, filter: `brightness(${0.23 + 0.77 * Math.max(0, Math.min(1, (fallbackState.lights - (n - 1) * 0.18) / 0.17))})` }">
           <span class="intro-fallback-candies"><b>✦</b><b>✧</b><b>✦</b></span>
           <span class="intro-fallback-sugar-beads"><i v-for="bead in 4" :key="bead"></i></span>
         </div>
         <svg class="intro-fallback-ribbon" viewBox="0 0 400 520" fill="none">
           <path d="M-12 448C430 520 441 358 202 382S-50 308 204 295S374 222 204 212S86 157 204 139S280 92 202 66" pathLength="1" />
         </svg>
-        <div class="intro-fallback-star">✦</div>
+        <div class="intro-fallback-star" :style="{ opacity: fallbackState.star }">✦</div>
         <div class="intro-fallback-plate"></div>
       </div>
     </div>
@@ -145,7 +150,7 @@ onBeforeUnmount(() => {
 .cake-intro-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .cake-intro-fallback{position:absolute;inset:0;z-index:1;display:grid;place-items:center;perspective:900px}
 .intro-fallback-cake{position:relative;width:min(80vw,410px);aspect-ratio:400/520;animation:fallbackPullback 12.2s cubic-bezier(.3,.08,.3,1) both}
-.intro-fallback-tier{position:absolute;left:calc(4% + (var(--tier) - 1)*8%);right:calc(4% + (var(--tier) - 1)*8%);bottom:calc(9% + (var(--tier) - 1)*15.4%);height:18%;border:1px solid #e6f4fa70;border-radius:50%/16%;background:linear-gradient(90deg,#8cabbf,#f0f2ee 40%,#cedee6 78%,#9dbacd);filter:brightness(.23);box-shadow:inset 0 -8px 20px #33557530;animation:fallbackTierLight 2s calc(1.6s + (var(--tier) - 1)*1.8s) forwards}
+.intro-fallback-tier{position:absolute;left:calc(4% + (var(--tier) - 1)*8%);right:calc(4% + (var(--tier) - 1)*8%);bottom:calc(9% + (var(--tier) - 1)*15.4%);height:18%;border:1px solid #e6f4fa70;border-radius:50%/16%;background:linear-gradient(90deg,#8cabbf,#f0f2ee 40%,#cedee6 78%,#9dbacd);filter:brightness(.23);box-shadow:inset 0 -8px 20px #33557530}
 .intro-fallback-tier:before{content:'';position:absolute;left:0;right:0;top:0;height:23%;border-radius:50%;background:linear-gradient(140deg,#faf9f1,#dce8ee);box-shadow:0 3px 8px #9ec6db30}
 .intro-fallback-tier:after{content:'';position:absolute;left:0;right:0;bottom:8%;height:1px;background:#d8ba7e;border-radius:50%}
 .intro-fallback-sugar-beads{position:absolute;left:9%;right:9%;top:67%;display:flex;justify-content:space-between}
@@ -157,12 +162,10 @@ onBeforeUnmount(() => {
 .intro-fallback-candies b{font-size:clamp(10px,3vw,19px);font-weight:400}
 .intro-fallback-ribbon{position:absolute;inset:0;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 4px #7de8ff) drop-shadow(0 0 14px #3685f0)}
 .intro-fallback-ribbon path{stroke:#dcfbff;stroke-width:3;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:fallbackRibbon 10.8s 1.2s ease-in-out forwards}
-.intro-fallback-star{position:absolute;top:3%;left:50%;transform:translateX(-50%);color:#f4ffff;font-size:66px;line-height:1;text-shadow:0 0 14px #fff,0 0 35px #a4e8ff,0 0 80px #4c9dff;opacity:0;animation:fallbackStar 1.7s 11.2s forwards}
+.intro-fallback-star{position:absolute;top:3%;left:50%;transform:translateX(-50%);color:#f4ffff;font-size:66px;line-height:1;text-shadow:0 0 14px #fff,0 0 35px #a4e8ff,0 0 80px #4c9dff;opacity:0}
 .intro-fallback-plate{position:absolute;left:0;right:0;bottom:5%;height:5%;z-index:-1;border-radius:50%;background:linear-gradient(#a0c8df,#223e61);box-shadow:0 20px 45px #63b6fa33}
 @keyframes fallbackPullback{0%{transform:translateY(-20%) scale(3.4);transform-origin:50% 93%}100%{transform:translateY(2%) scale(1);transform-origin:50% 93%}}
-@keyframes fallbackTierLight{to{filter:brightness(1)}}
 @keyframes fallbackRibbon{to{stroke-dashoffset:0}}
-@keyframes fallbackStar{to{opacity:1}}
 @keyframes introStarsTwinkle{0%{opacity:.48}55%{opacity:.85}100%{opacity:1}}
 @media(min-aspect-ratio:1/1){.cake-intro-heading{top:14%;left:6%;right:auto;width:28%;text-align:left}.cake-intro-caption{bottom:6%}}
 @media(max-height:600px){.cake-intro-heading{top:6%}.cake-intro-heading h1{font-size:23px;margin-top:5px}.cake-intro-caption{bottom:5%;gap:8px}.cake-intro-caption-line{height:20px}.intro-fallback-cake{width:min(60vh,45vw)}}
