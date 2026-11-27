@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
             <button class="wish-wall-send" type="submit" :disabled="!message.trim() || remaining < 0 || saving || !wishesApiConfigured">
               <span aria-hidden="true">✦</span> {{ saving ? "正在珍藏这份心意…" : "把祝福放进瓶里" }}
             </button>
-            <p id="wish-wall-form-note" class="wish-wall-form-note">每份祝福都会公开珍藏，请勿填写个人隐私信息。</p>
+            <p id="wish-wall-form-note" class="wish-wall-form-note">每份祝福都会公开珍藏，请勿填写个人隐私信息。提交时会记录 IP 地址，仅后台可见。</p>
           </form>
 
           <p v-if="!wishesApiConfigured" id="wish-wall-form-status" class="wish-wall-alert" role="status">祝福瓶正在准备中，稍后就能留下心意。</p>

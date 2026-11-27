@@ -1,9 +1,10 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
+import DailyNotes from './DailyNotes.vue';
 
 defineProps({ name: String, homeHref: String, characterSrc: String });
 
-// 这个房间里的碎碎念和「下次一起」提议，都在这里修改。
+// 小新的悄悄话和「下次一起」提议；每日碎碎念从独立数据表读取。
 const whispers = [
   '大哥，居然被你找到这里了！',
   '今天你最大，蛋糕可以多吃一口。',
@@ -19,7 +20,6 @@ const promises = [
 const active = ref(null);
 const whisperIndex = ref(0);
 const promiseIndex = ref(0);
-const frameFlipped = ref(false);
 const closeButton = ref(null);
 const inspector = ref(null);
 const currentPromise = computed(() => promises[promiseIndex.value]);
@@ -28,7 +28,6 @@ let returnFocus = null;
 async function inspect(object, event) {
   returnFocus = event.currentTarget;
   active.value = object;
-  frameFlipped.value = false;
   await nextTick();
   closeButton.value?.focus({ preventScroll: true });
 }
@@ -54,7 +53,7 @@ function onKeydown(event) {
     return;
   }
   if (event.key !== 'Tab') return;
-  const stops = [...inspector.value.querySelectorAll('button:not([disabled]), a[href]')];
+  const stops = [...inspector.value.querySelectorAll('button:not([disabled]), a[href], select:not([disabled])')];
   const index = stops.indexOf(document.activeElement);
   if (index < 0 || (event.shiftKey && index === 0) || (!event.shiftKey && index === stops.length - 1)) {
     event.preventDefault();
@@ -80,7 +79,7 @@ function onKeydown(event) {
         <p>灯还亮着，进来坐一会儿。</p>
       </header>
 
-      <div class="room-scene" role="group" aria-label="星空下的小房间，桌上有小新、约定册和相框，可以逐个打开">
+      <div class="room-scene" role="group" aria-label="星空下的小房间，桌上有小新、约定册和日记本，可以逐个打开">
         <div class="room-wall-light" aria-hidden="true"></div>
         <div class="room-window" aria-hidden="true">
           <div class="room-moon"></div>
@@ -136,22 +135,22 @@ function onKeydown(event) {
             <span class="room-object-label">约定册</span>
           </button>
 
-          <button class="room-object room-object-frame" type="button" aria-label="拿起相框，看看留给未来的合照" aria-haspopup="dialog" @click="inspect('frame', $event)">
+          <button class="room-object room-object-journal" type="button" aria-label="翻开我的碎碎念，看看每天的日常" aria-haspopup="dialog" @click="inspect('diary', $event)">
             <span class="room-object-art" aria-hidden="true">
-              <svg class="room-frame-art" viewBox="0 0 150 170">
-                <path d="M105 87L132 157H100Z" fill="#78573f" />
-                <rect x="17" y="15" width="115" height="140" rx="3" fill="#ba9268" stroke="#d8b88b" stroke-width="2" />
-                <rect x="25" y="23" width="99" height="124" fill="#e9ddc7" />
-                <rect x="32" y="30" width="85" height="90" fill="#62747f" />
-                <circle cx="95" cy="49" r="10" fill="#dec89a" />
-                <path d="M32 107L58 72L80 96L92 83L117 112V120H32Z" fill="#3d5862" />
-                <path d="M55 110V98M49 110V106Q49 101 55 101Q61 101 61 106V110M78 110V96M72 110V104Q72 99 78 99Q84 99 84 104V110" fill="none" stroke="#f2dfb9" stroke-width="2" stroke-linecap="round" />
-                <text x="75" y="137" text-anchor="middle" fill="#80644a" font-family="'Songti SC',serif" font-size="11">等下一次见面</text>
+              <svg class="room-journal-art" viewBox="0 0 150 170">
+                <path d="M31 23L130 29L125 157L26 150Z" fill="#8197a5" stroke="#b6c9cb" stroke-width="2" />
+                <path d="M22 14L119 20L115 147L18 141Z" fill="#d5e1df" stroke="#b6cece" stroke-width="2" />
+                <path d="M30 23L111 28L107 135L26 130Z" fill="#f4edda" />
+                <path d="M41 17L39 34M62 18L60 35M83 19L81 36M104 21L102 38" stroke="#a17f57" stroke-width="3" stroke-linecap="round" />
+                <path d="M46 51H92M42 107H92M42 117H81" stroke="#b5b3a3" stroke-width="2" stroke-linecap="round" />
+                <text x="70" y="77" text-anchor="middle" fill="#647d81" font-family="'Songti SC',serif" font-size="14">我的</text>
+                <text x="69" y="96" text-anchor="middle" fill="#647d81" font-family="'Songti SC',serif" font-size="16">碎碎念</text>
+                <path d="M108 111L111 120L120 123L111 126L108 135L105 126L96 123L105 120Z" fill="#b9955f" />
               </svg>
               <i class="room-object-spark"></i>
               <i class="room-object-spark room-object-spark-secondary"></i>
             </span>
-            <span class="room-object-label">未来的合照</span>
+            <span class="room-object-label">我的碎碎念</span>
           </button>
         </div>
         <p class="room-scene-caption">三件小东西，藏着一点心意。</p>
@@ -194,29 +193,12 @@ function onKeydown(event) {
             <p class="room-promise-hint">先写下几个提议，等见面时慢慢选。</p>
           </template>
 
-          <template v-else-if="active === 'frame'">
-            <span class="room-note-eyebrow">替未来留一个位置</span>
-            <h2 id="room-note-title">还没拍下的合照。</h2>
-            <button class="room-keepsake" type="button" :aria-pressed="frameFlipped" :aria-label="frameFlipped ? '相框背面：下一张回忆，等我们一起拍。点击翻回正面' : '相框正面：等下一次见面。点击看看背面'" @click="frameFlipped = !frameFlipped">
-              <span class="room-keepsake-turn" :class="{ 'is-flipped': frameFlipped }">
-                <span class="room-keepsake-face room-keepsake-front" :aria-hidden="frameFlipped">
-                  <span class="room-empty-photo">
-                    <svg viewBox="0 0 240 170" aria-hidden="true">
-                      <circle cx="181" cy="41" r="18" fill="#e4ce9f" />
-                      <path d="M0 139L70 63L128 126L161 90L240 155V170H0Z" fill="#405b68" />
-                      <g fill="none" stroke="#e9d9bb" stroke-width="3" stroke-linecap="round"><circle cx="93" cy="103" r="9"/><circle cx="134" cy="99" r="9"/><path d="M75 146V132Q75 116 93 116Q111 116 111 132V146M116 146V128Q116 112 134 112Q152 112 152 128V146"/></g>
-                    </svg>
-                  </span>
-                  <span class="room-photo-caption">等下一次见面。</span>
-                </span>
-                <span class="room-keepsake-face room-keepsake-back" :aria-hidden="!frameFlipped">
-                  <span class="room-photo-star" aria-hidden="true">✦</span>
-                  <span>下一张回忆，<br />等我们一起拍。</span>
-                  <small>这一格，先替我们留着。</small>
-                </span>
-              </span>
-            </button>
-            <p class="room-frame-hint">轻点相框，{{ frameFlipped ? '翻回正面' : '看看背面' }}。</p>
+          <template v-else-if="active === 'diary'">
+            <header class="room-diary-heading">
+              <span class="room-note-eyebrow">把平凡的一天，也留给你</span>
+              <h2 id="room-note-title">我的碎碎念</h2>
+            </header>
+            <div class="room-diary-reading"><DailyNotes /></div>
           </template>
 
           <button class="room-put-back" type="button" @click="close">放回桌上</button>
@@ -260,7 +242,7 @@ function onKeydown(event) {
 .room-desk-leg-left{left:14%}.room-desk-leg-right{right:14%;rotate:-3deg}
 .room-objects{position:absolute;z-index:4;left:7%;right:7%;bottom:20%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;gap:clamp(8px,4vw,48px)}
 .room-object{--object-delay:0s;--spark-top:9%;--spark-right:20%;display:flex;flex-direction:column;align-items:center;min-width:0;min-height:44px;padding:0;border:0;border-radius:12px;background:transparent;color:#f8e3ba;touch-action:manipulation}
-.room-object-book{--object-delay:-2s;--spark-top:2%;--spark-right:12%}.room-object-frame{--object-delay:-4s;--spark-top:16%;--spark-right:4%}
+.room-object-book{--object-delay:-2s;--spark-top:2%;--spark-right:12%}.room-object-journal{--object-delay:-4s;--spark-top:16%;--spark-right:4%}
 .room-object-art{position:relative;isolation:isolate;display:block;width:100%;height:156px;transition:translate .25s;filter:drop-shadow(0 7px 6px #080c1b66);pointer-events:none;animation:roomObjectGlow 6s var(--object-delay) ease-in-out infinite}
 .room-object-art:before{content:'';position:absolute;z-index:-1;inset:10% 5% -4%;border-radius:50%;background:radial-gradient(ellipse,#ffe3a15c,transparent 68%);filter:blur(7px);opacity:.12;animation:roomObjectAura 6s var(--object-delay) ease-in-out infinite}
 .room-object:hover .room-object-art,.room-object:focus-visible .room-object-art{animation:none;translate:0 -7px;filter:drop-shadow(0 0 4px #fff0bd99) drop-shadow(0 0 13px #f2c37199)}
@@ -270,7 +252,7 @@ function onKeydown(event) {
 .room-toy-art img{position:absolute;left:50%;bottom:2px;width:240px;max-width:none;height:165px;object-fit:contain;transform:translateX(-50%);filter:drop-shadow(0 8px 5px #07102366)}
 .room-toy-stand{position:absolute;bottom:-1px;left:50%;width:78px;height:11px;border-radius:50%;background:linear-gradient(#b99364,#64503e);transform:translateX(-50%);box-shadow:0 5px 7px #07102366}
 .room-book-art{display:block;width:135px;height:156px;max-width:100%;margin:0 auto;rotate:-8deg;translate:0 10px}
-.room-frame-art{display:block;width:138px;height:156px;max-width:100%;margin:0 auto;rotate:6deg;translate:0 10px}
+.room-journal-art{display:block;width:138px;height:156px;max-width:100%;margin:0 auto;rotate:6deg;translate:0 10px}
 .room-object-spark{position:absolute;z-index:2;top:var(--spark-top);right:var(--spark-right);width:17px;height:24px;background:#fff8da;clip-path:polygon(50% 0,62% 39%,100% 50%,62% 61%,50% 100%,38% 61%,0 50%,38% 39%);filter:drop-shadow(0 0 7px #ffdb92);animation:roomObjectSpark 6s var(--object-delay) ease-in-out infinite}
 .room-object-spark-secondary{top:52%;right:auto;left:8%;width:11px;height:16px;animation-delay:calc(var(--object-delay) + .25s)}
 .room-scene-caption{position:absolute;z-index:6;left:12px;right:12px;bottom:16px;margin:0;color:#c4b9b3;font-size:13px;line-height:1.8;text-align:center;letter-spacing:.08em}
@@ -305,17 +287,10 @@ function onKeydown(event) {
 .room-page-controls button:disabled{opacity:.35;cursor:default}
 .room-page-controls>span{color:#9b7e61;font-size:13px;font-variant-numeric:tabular-nums}
 .room-promise-hint{margin:15px 0 0;color:#9a8067;font-size:13px;line-height:1.8}
-.room-keepsake{display:block;width:min(100%,280px);height:265px;margin:24px auto 0;padding:0;border:0;border-radius:3px;background:transparent;perspective:1000px;rotate:-3deg;touch-action:manipulation}
-.room-keepsake-turn{position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d;transition:transform .65s cubic-bezier(.2,.7,.25,1)}
-.room-keepsake-turn.is-flipped{transform:rotateY(180deg)}
-.room-keepsake-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:13px 13px 17px;border:1px solid #d1bda1;border-radius:3px;background:#fff8e9;box-shadow:0 10px 23px #73513329;backface-visibility:hidden;-webkit-backface-visibility:hidden}
-.room-empty-photo{display:block;width:100%;height:178px;overflow:hidden;background:#6b7e88}
-.room-empty-photo svg{display:block;width:100%;height:100%}
-.room-photo-caption{display:block;margin-top:19px;color:#8c7059;font:18px/1.7 'Songti SC',serif;letter-spacing:.04em}
-.room-keepsake-back{justify-content:center;transform:rotateY(180deg);color:#77553d;font:400 25px/1.9 'Songti SC','Noto Serif SC',serif;letter-spacing:.06em}
-.room-photo-star{display:block;margin-bottom:13px;color:#bb925f;font-size:25px}
-.room-keepsake-back small{display:block;margin-top:17px;color:#ab8c68;font-size:13px;letter-spacing:.03em}
-.room-frame-hint{margin:23px 0 4px;color:#9a7d61;font-size:14px;line-height:1.8}
+.room-note-diary{display:flex;flex-direction:column;width:min(100%,680px);overflow:hidden;padding:30px 26px 10px;text-align:left}
+.room-diary-heading{flex-shrink:0;padding-right:20px}.room-diary-heading h2{margin-bottom:14px}
+.room-diary-reading{min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:0 5px 10px;scrollbar-width:thin}
+.room-note-diary>.room-put-back{flex-shrink:0;margin-top:3px}
 .room-inspect-enter-active,.room-inspect-leave-active{transition:opacity .25s}
 .room-inspect-enter-active .room-note,.room-inspect-leave-active .room-note{transition:transform .3s}
 .room-inspect-enter-from,.room-inspect-leave-to{opacity:0}
@@ -336,20 +311,19 @@ function onKeydown(event) {
   .room-window{left:9%;width:47%;border-width:6px}.room-window-sill{left:7%;width:51%}
   .room-wall-note{top:14%;right:5%;width:30%;font-size:12px;letter-spacing:.02em}
   .room-objects{left:5%;right:5%;gap:7px}
-  .room-object-art{height:126px}.room-book-art,.room-frame-art{height:126px}
+  .room-object-art{height:126px}.room-book-art,.room-journal-art{height:126px}
   .room-toy-art img{width:190px;height:134px}.room-toy-stand{width:65px}
   .room-object-label{font-size:14px;letter-spacing:0;margin-top:7px}
   .room-lamp{right:5%;width:28%}.room-desk{left:3%;right:3%}
   .room-object{--spark-right:6%}.room-object-book{--spark-right:1%}
   .room-footer{padding-top:24px}.room-footer p{font-size:21px}
 }
-@media(max-width:360px){.secret-room{padding-inline:12px}.room-scene{height:385px}.room-object-art{height:117px}.room-book-art,.room-frame-art{height:117px}.room-toy-art img{height:125px;width:178px}.room-note{padding-inline:20px}.room-note h2{font-size:25px}}
+@media(max-width:360px){.secret-room{padding-inline:12px}.room-scene{height:385px}.room-object-art{height:117px}.room-book-art,.room-journal-art{height:117px}.room-toy-art img{height:125px;width:178px}.room-note{padding-inline:20px}.room-note h2{font-size:25px}}
 @media(prefers-reduced-motion:reduce){
   .room-heading,.room-scene,.room-footer,.room-wall-light,.room-light-cone,.room-window-star,.room-object-art,.room-object-art:before,.room-object-spark{animation:none}
   .room-object-art{filter:drop-shadow(0 0 5px #f4ce8a80)}.room-object-art:before{opacity:.3}.room-object-spark{opacity:.9}
-  .room-shooting-star{display:none}.room-object-art,.room-keepsake-turn,.room-inspect-enter-active,.room-inspect-leave-active,.room-inspect-enter-active .room-note,.room-inspect-leave-active .room-note{transition:none}
+  .room-shooting-star{display:none}.room-object-art,.room-inspect-enter-active,.room-inspect-leave-active,.room-inspect-enter-active .room-note,.room-inspect-leave-active .room-note{transition:none}
   .room-object:hover .room-object-art,.room-object:focus-visible .room-object-art{translate:none}
-  .room-keepsake-face{backface-visibility:visible;-webkit-backface-visibility:visible}
-  .room-keepsake-back{transform:none;visibility:hidden}.room-keepsake-turn.is-flipped{transform:none}.room-keepsake-turn.is-flipped .room-keepsake-back{visibility:visible}.room-keepsake-turn.is-flipped .room-keepsake-front{visibility:hidden}
+
 }
 </style>

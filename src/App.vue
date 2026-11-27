@@ -14,6 +14,7 @@ import { createWarpField } from "./warp";
 import { createFireworks } from "./fireworks";
 import { createBirthdayMusic } from "./birthdayMusic";
 import { createMemoryFilmMusic } from "./memoryFilmMusic";
+import { createCountdownMusic } from "./countdownMusic";
 import MemoryFilm from "./components/MemoryFilm.vue";
 import WishWall from "./components/WishWall.vue";
 import GiftLetter from "./components/GiftLetter.vue";
@@ -22,7 +23,8 @@ import SecretNote from "./components/SecretNote.vue";
 import BirdLetter from "./components/BirdLetter.vue";
 import BirthdayTicket from "./components/BirthdayTicket.vue";
 import BirthdayCountdown from "./components/BirthdayCountdown.vue";
-import { birthdayCountdownConfig, canAccessBirthday, resolveCountdownDeadline } from "./birthdayCountdown";
+import { birthdayCountdownConfig, canAccessBirthday } from "./birthdayCountdown";
+import { initialBirthdayStage, rememberBirthdayOpening, resolveBirthdaySessionDeadline } from "./birthdaySession";
 import { albumPhotos as photos } from "./memories";
 import { preloadMemoryPhotos } from "./memoryPhotos";
 import { assetUrl } from "./assets";
@@ -41,7 +43,8 @@ const BirthdayRadio = defineAsyncComponent(() => import("./components/BirthdayRa
 const WISH_PAGE = new URLSearchParams(location.search).get("page") === "wishes";
 const RADIO_PAGE = !SECRET && new URLSearchParams(location.search).get("page") === "radio";
 const HOME_RETURN_LINK = new URLSearchParams(location.search).get("page") === "home";
-const RETURNING_HOME = HOME_RETURN_LINK && performance.getEntriesByType("navigation")[0]?.type !== "reload";
+const navigationType = performance.getEntriesByType("navigation")[0]?.type;
+const RETURNING_HOME = HOME_RETURN_LINK && navigationType !== "reload";
 const birthdayName = "陈照敬";
 const birthdayDate = "1月10日";
 const wishWallUrl = `${assetUrl("")}?page=wishes`;
@@ -50,15 +53,20 @@ const homeUrl = `${assetUrl("")}?page=home`;
 const warpCharacterUrl = assetUrl("/labixiaoxin.png");
 const birthdayMusic = createBirthdayMusic();
 const memoryFilmMusic = createMemoryFilmMusic();
-const birthdayDeadline = resolveCountdownDeadline(birthdayCountdownConfig);
+const countdownMusic = createCountdownMusic();
+const birthdayDeadline = resolveBirthdaySessionDeadline(birthdayCountdownConfig);
 const birthdayUnlocked = ref(canAccessBirthday(birthdayDeadline));
-const stage = ref(birthdayUnlocked.value && RETURNING_HOME ? "cover" : "countdown");
+const stage = ref(initialBirthdayStage({ deadline: birthdayDeadline, returningHome: RETURNING_HOME, navigationType }));
 let birthdayGateTimer = null;
 const opened = ref(false);
 const isOpening = ref(false);
 const soundOn = ref(true);
 const introSoundReady = ref(false);
+const countdownMusicReady = ref(false);
 let introSoundRequest = 0;
+let countdownMusicRequest = 0;
+const countdownActive = computed(() => !birthdayUnlocked.value || (!SECRET && !WISH_PAGE && !RADIO_PAGE && stage.value === "countdown"));
+const openingSoundReady = computed(() => countdownActive.value ? countdownMusicReady.value : introSoundReady.value);
 const letterAudioActive = ref(false);
 const photoOpen = ref(false);
 const memoryTransitionActive = ref(false);
@@ -109,6 +117,7 @@ function prepareOpening() {
 
 function startCakeIntro() {
   if (!enforceBirthdayGate()) return;
+  stopCountdownMusic();
   if (soundOn.value) unlockIntroSound();
   stage.value = "intro";
   preloadMemoryPhotos();
@@ -116,6 +125,7 @@ function startCakeIntro() {
 
 function showBirthdayCover() {
   if (!enforceBirthdayGate()) return;
+  rememberBirthdayOpening(birthdayDeadline);
   stage.value = "cover";
 }
 
@@ -194,6 +204,35 @@ function playUiSound(kind, detail) {
   if (soundOn.value && !letterAudioActive.value) birthdayMusic.effect(kind, detail);
 }
 
+async function startCountdownMusic() {
+  if (!soundOn.value || !countdownActive.value || document.hidden || disposing) return;
+  const request = ++countdownMusicRequest;
+  try {
+    const playing = await countdownMusic.start();
+    if (request === countdownMusicRequest && !disposing)
+      countdownMusicReady.value = playing;
+  } catch {
+    if (request === countdownMusicRequest) countdownMusicReady.value = false;
+  }
+}
+
+function stopCountdownMusic(reset = true) {
+  countdownMusicRequest++;
+  countdownMusicReady.value = false;
+  if (reset) countdownMusic.reset();
+  else countdownMusic.pause();
+}
+
+function unlockOpeningSound() {
+  if (countdownActive.value) startCountdownMusic();
+  if (!SECRET && !WISH_PAGE && !RADIO_PAGE) unlockIntroSound();
+}
+
+watch(countdownActive, (active) => {
+  if (active) startCountdownMusic();
+  else stopCountdownMusic();
+});
+
 async function unlockIntroSound() {
   const request = ++introSoundRequest;
   try {
@@ -207,24 +246,26 @@ async function unlockIntroSound() {
 
 function unlockIntroSoundFromGesture(event) {
   if (
-    SECRET || WISH_PAGE || RADIO_PAGE || !soundOn.value || introSoundReady.value ||
-    !["countdown", "intro"].includes(stage.value) ||
+    !soundOn.value ||
+    (!countdownActive.value && (SECRET || WISH_PAGE || RADIO_PAGE || stage.value !== "intro")) ||
+    (openingSoundReady.value && (introSoundReady.value || SECRET || WISH_PAGE || RADIO_PAGE)) ||
     event.target.closest?.(".intro-sound-button")
   ) return;
-  unlockIntroSound();
+  unlockOpeningSound();
 }
 
 function toggleIntroSound() {
-  if (soundOn.value && introSoundReady.value) {
+  if (soundOn.value && openingSoundReady.value) {
     introSoundRequest++;
     soundOn.value = false;
     introSoundReady.value = false;
     birthdayMusic.pause();
+    stopCountdownMusic(false);
     return;
   }
   soundOn.value = true;
   // Called directly from the button tap, before any await, for mobile browsers.
-  unlockIntroSound();
+  unlockOpeningSound();
 }
 function onPointerMove(event) {
   if (
@@ -513,6 +554,7 @@ function restartExperience() {
   frame = 0;
   birthdayMusic.reset();
   memoryFilmMusic.reset();
+  stopCountdownMusic();
   stage.value = "countdown";
   opened.value = false;
   isOpening.value = false;
@@ -826,6 +868,7 @@ function onVisibility() {
   document.documentElement.classList.toggle("page-hidden", document.hidden);
   if (document.hidden) {
     introSoundRequest++;
+    stopCountdownMusic(false);
     warpEffect?.pause();
     fireworksEffect?.pause();
     gsap.globalTimeline.pause();
@@ -844,14 +887,14 @@ function onVisibility() {
     gsap.globalTimeline.resume();
     if (renderer && !frame && !["cover", "intro", "countdown"].includes(stage.value)) animateStars();
     if (soundOn.value && opened.value) startMusic();
-    else if (soundOn.value && !SECRET && !WISH_PAGE && !RADIO_PAGE && ["countdown", "intro"].includes(stage.value)) unlockIntroSound();
+    else if (soundOn.value && (countdownActive.value || (!SECRET && !WISH_PAGE && !RADIO_PAGE && stage.value === "intro"))) unlockOpeningSound();
   }
 }
 
 onMounted(() => {
-  if (!SECRET && !WISH_PAGE && !RADIO_PAGE) {
+  if (countdownActive.value || (!SECRET && !WISH_PAGE && !RADIO_PAGE)) {
     // Autoplay when allowed; the first page gesture retries a blocked context.
-    unlockIntroSound();
+    unlockOpeningSound();
     for (const event of ["pointerdown", "touchend", "keydown"])
       document.addEventListener(event, unlockIntroSoundFromGesture, { capture: true, passive: true });
   }
@@ -892,19 +935,20 @@ onBeforeUnmount(() => {
   renderer?.dispose();
   birthdayMusic.dispose();
   memoryFilmMusic.dispose();
+  countdownMusic.dispose();
 });
 </script>
 
 <template>
   <button
-    v-if="!SECRET && !WISH_PAGE && !RADIO_PAGE && ['countdown', 'intro'].includes(stage)"
+    v-if="countdownActive || (!SECRET && !WISH_PAGE && !RADIO_PAGE && stage === 'intro')"
     class="intro-sound-button"
     type="button"
-    :aria-pressed="soundOn && introSoundReady"
+    :aria-pressed="soundOn && openingSoundReady"
     @click.stop="toggleIntroSound"
   >
-    <span aria-hidden="true">{{ soundOn && introSoundReady ? '♫' : '♪' }}</span>
-    {{ !soundOn ? '音效已关闭' : introSoundReady ? '音效已开启' : '轻点开启音效' }}
+    <span aria-hidden="true">{{ soundOn && openingSoundReady ? '♫' : '♪' }}</span>
+    {{ countdownActive ? (!soundOn ? '音乐已关闭' : countdownMusicReady ? '音乐已开启' : '轻点播放音乐') : (!soundOn ? '音效已关闭' : introSoundReady ? '音效已开启' : '轻点开启音效') }}
   </button>
   <BirthdayCountdown v-if="!birthdayUnlocked" :name="birthdayName" :deadline="birthdayDeadline" @complete="finishBirthdayCountdown" />
   <template v-else>

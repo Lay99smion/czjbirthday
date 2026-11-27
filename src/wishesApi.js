@@ -3,6 +3,7 @@ import { WISH_LIMIT } from "./wishesCollection";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, "");
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 const wishesEndpoint = supabaseUrl ? `${supabaseUrl}/rest/v1/wishes` : "";
+// The database records the submitter's IP; public responses never select it.
 const wishFields = "id,content,created_at,is_pinned";
 
 export const wishesApiConfigured = Boolean(supabaseUrl && publishableKey);
