@@ -20,7 +20,8 @@ function formatDate(date) {
 }
 
 function optionLabel(entry) {
-  const date = formatDate(entry.date);
+  const day = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", weekday: "short" }).format(new Date(`${entry.date}T12:00:00+08:00`));
+  const date = `${entry.date.replace(/-/g, ".")} ${day}`;
   if (entries.value.filter((note) => note.date === entry.date).length < 2) return date;
   const preview = entry.content.trim().replace(/\s+/g, " ");
   return `${date} · ${Array.from(preview).slice(0, 14).join("")}${Array.from(preview).length > 14 ? '…' : ''}`;
@@ -71,15 +72,14 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); });
 <template>
   <div class="daily-notes" :aria-busy="loading">
     <div class="daily-notes-toolbar">
-      <p>很小的事，也想说给你听。</p>
+      <div v-if="entries.length" class="daily-notes-picker">
+        <svg class="daily-notes-calendar" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M6.5 2.5v4M13.5 2.5v4M3 8.5h14M6.5 12h2M11.5 12h2"/></svg>
+        <select id="daily-note-date" v-model="selectedId" aria-label="选择日常日期" @change="turnTo(currentIndex)">
+          <option v-for="entry in entries" :key="entry.id" :value="String(entry.id)">{{ optionLabel(entry) }}</option>
+        </select>
+        <svg class="daily-notes-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>
+      </div>
       <button type="button" :disabled="loading" @click="load()">{{ loading ? '正在翻开…' : '看看新日常' }}</button>
-    </div>
-
-    <div v-if="entries.length" class="daily-notes-picker">
-      <label for="daily-note-date">翻到这一天</label>
-      <select id="daily-note-date" v-model="selectedId" @change="turnTo(currentIndex)">
-        <option v-for="entry in entries" :key="entry.id" :value="String(entry.id)">{{ optionLabel(entry) }}</option>
-      </select>
     </div>
 
     <p v-if="loadError" class="daily-notes-message daily-notes-error" role="alert">{{ loadError }}<button type="button" :disabled="loading" @click="load()">重试</button></p>
@@ -96,7 +96,6 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); });
         <h3 ref="heading" id="daily-note-heading" tabindex="-1"><time :datetime="current.date">{{ formatDate(current.date) }}</time></h3>
       </header>
       <div class="daily-note-content">{{ current.content }}</div>
-      <p class="daily-note-signature">今天就先写到这里。</p>
     </article>
 
     <nav v-if="entries.length" class="daily-notes-navigation" aria-label="翻阅我的碎碎念">
@@ -111,18 +110,19 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); });
 
 <style scoped>
 .daily-notes{min-width:0;text-align:left}
-.daily-notes-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:18px;border-bottom:1px solid #ac8c6533}
-.daily-notes-toolbar p{margin:0;color:#8a7058;font-size:14px;line-height:1.8}
+.daily-notes-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-bottom:16px;border-bottom:1px solid #ac8c6529}
 .daily-notes button{min-height:44px;padding:9px 12px;border:1px solid #aa8b6340;border-radius:8px;background:#fff8eb88;color:#795b40;font:inherit;font-size:14px;cursor:pointer}
 .daily-notes button:disabled{opacity:.4;cursor:default}.daily-notes button:hover:not(:disabled){background:#fffaf1}.daily-notes button:focus-visible,.daily-notes select:focus-visible{outline:2px solid #9e7950;outline-offset:3px}
-.daily-notes-picker{display:flex;align-items:center;gap:12px;margin:20px 0 0}.daily-notes-picker label{flex-shrink:0;color:#8d7357;font-size:14px}
-.daily-notes-picker select{min-width:0;width:100%;min-height:44px;padding:9px 12px;border:1px solid #b795653b;border-radius:8px;background:#fff8ed;color:#694f3b;font:inherit;font-size:15px}
-.daily-note-entry{padding:27px 0 14px;min-width:0}.daily-note-entry header{display:flex;align-items:baseline;gap:12px;margin-bottom:24px}
-.daily-note-mark{color:#ac8557;font-size:17px}.daily-note-entry h3{margin:0;color:#6b4c35;font:400 clamp(17px,3.8vw,21px)/1.8 'Songti SC','Noto Serif SC',serif;letter-spacing:.035em}
+.daily-notes-toolbar>button{flex-shrink:0;min-height:36px;padding:7px 10px;border-color:#aa8b632e;border-radius:10px;background:#fff8eb45;color:#8a6c4d;font-size:13px;line-height:20px}
+.daily-notes-picker{position:relative;flex:1;min-width:0;max-width:236px;margin-right:auto;border:1px solid #b795653d;border-radius:10px;background:linear-gradient(135deg,#fffaf0bd,#f4e8d37a);box-shadow:inset 0 1px #ffffff80}
+.daily-notes-picker:focus-within{border-color:#b18a56;box-shadow:0 0 0 3px #b18a5612}
+.daily-notes-picker select{display:block;appearance:none;-webkit-appearance:none;width:100%;min-width:0;min-height:36px;padding:7px 25px 7px 31px;border:0;border-radius:inherit;background:transparent;color:#806347;font:inherit;font-size:13px;line-height:20px;letter-spacing:.015em;text-overflow:ellipsis;cursor:pointer}
+.daily-notes-calendar,.daily-notes-chevron{position:absolute;top:50%;transform:translateY(-50%);fill:none;stroke:#a5875f;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}.daily-notes-calendar{left:10px;width:15px;height:15px}.daily-notes-chevron{right:9px;width:11px;height:11px}
+.daily-note-entry{padding:21px 0 26px;min-width:0}.daily-note-entry header{display:flex;align-items:baseline;gap:8px;margin-bottom:20px}
+.daily-note-mark{color:#ac8557;font-size:12px}.daily-note-entry h3{margin:0;color:#8a7056;font:400 14px/1.8 'Songti SC','Noto Serif SC',serif;letter-spacing:.025em}
 .daily-note-content{white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;color:#624e3e;font:400 17px/2.15 'Songti SC','Noto Serif SC',serif;letter-spacing:.025em;tab-size:2}
-.daily-note-signature{margin:32px 0 5px;color:#9c8268;font-size:14px;line-height:1.8;text-align:right}
 .daily-notes-navigation{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-top:20px;border-top:1px solid #ac8c6533}.daily-notes-navigation span{color:#9a8065;font-size:14px;font-variant-numeric:tabular-nums}
 .daily-notes-message{padding:25px 0;color:#8a7058;font-size:15px;line-height:1.9}.daily-notes-error button{display:block;margin-top:12px}
 .daily-notes-empty{padding:38px 0 42px;text-align:center;color:#8a7058}.daily-notes-empty>span{font-size:32px;color:#b59568}.daily-notes-empty p{margin:18px 0 9px;font:20px/1.9 'Songti SC',serif}.daily-notes-empty small{font-size:14px;line-height:1.9}
-@media(max-width:420px){.daily-notes-toolbar{gap:8px}.daily-notes-toolbar p{max-width:10em}.daily-notes-toolbar button{flex-shrink:0;padding-inline:9px}.daily-notes-picker{flex-direction:column;align-items:stretch;gap:8px}.daily-notes-navigation{gap:7px}.daily-notes-navigation button{padding-inline:7px;font-size:13px}.daily-note-content{font-size:16px;line-height:2.1}}
+@media(max-width:420px){.daily-notes-toolbar>button{padding-inline:8px}.daily-notes-navigation{gap:7px}.daily-notes-navigation button{padding-inline:7px;font-size:13px}.daily-note-content{font-size:16px;line-height:2.1}}
 </style>

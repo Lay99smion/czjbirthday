@@ -3,6 +3,7 @@ export const birthdayCountdownConfig = {
   demoSeconds: 15,
   // 按设备系统时间倒数到北京时间 2027 年 1 月 10 日零点。
   targetAt: "2027-01-10T00:00:00+08:00",
+  // targetAt: null,
   timeZone: "Asia/Shanghai",
 };
 

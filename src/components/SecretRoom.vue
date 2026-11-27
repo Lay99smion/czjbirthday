@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { createBackgroundMusic } from '../backgroundMusic';
 import DailyNotes from './DailyNotes.vue';
 
 defineProps({ name: String, homeHref: String, characterSrc: String });
@@ -23,7 +24,71 @@ const promiseIndex = ref(0);
 const closeButton = ref(null);
 const inspector = ref(null);
 const currentPromise = computed(() => promises[promiseIndex.value]);
+const music = createBackgroundMusic('/flowers.mp3');
+const musicEnabled = ref(true);
+const musicPlaying = ref(false);
+const musicGestures = ['pointerdown', 'touchend', 'keydown'];
+let musicRequest = 0;
+let disposed = false;
+let leaving = false;
 let returnFocus = null;
+
+async function startMusic() {
+  if (!musicEnabled.value || disposed || leaving || document.hidden) return;
+  const request = ++musicRequest;
+  try {
+    const playing = await music.start();
+    if (request === musicRequest && !disposed) musicPlaying.value = playing;
+  } catch {
+    if (request === musicRequest && !disposed) musicPlaying.value = false;
+  }
+}
+
+function pauseMusic() {
+  musicRequest++;
+  music.pause();
+  musicPlaying.value = false;
+}
+
+function toggleMusic() {
+  if (musicPlaying.value) {
+    musicEnabled.value = false;
+    pauseMusic();
+  } else {
+    musicEnabled.value = true;
+    startMusic();
+  }
+}
+
+function unlockMusic(event) {
+  if (!musicPlaying.value && !event.target.closest?.('.room-music')) startMusic();
+}
+
+function onMusicVisibility() {
+  if (document.hidden) pauseMusic();
+  else startMusic();
+}
+
+function onPageHide() { leaving = true; pauseMusic(); }
+function onPageShow() { leaving = false; startMusic(); }
+
+onMounted(() => {
+  startMusic();
+  for (const event of musicGestures)
+    document.addEventListener(event, unlockMusic, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', onMusicVisibility);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('pageshow', onPageShow);
+});
+onBeforeUnmount(() => {
+  disposed = true;
+  pauseMusic();
+  music.dispose();
+  for (const event of musicGestures) document.removeEventListener(event, unlockMusic, true);
+  document.removeEventListener('visibilitychange', onMusicVisibility);
+  window.removeEventListener('pagehide', onPageHide);
+  window.removeEventListener('pageshow', onPageShow);
+});
 
 async function inspect(object, event) {
   returnFocus = event.currentTarget;
@@ -70,7 +135,12 @@ function onKeydown(event) {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 4.5A8.5 8.5 0 1 0 19.5 18 8.8 8.8 0 0 1 17.5 4.5Z" /></svg>
           返回生日夜空
         </a>
-        <span>给{{ name }}的隐藏后记</span>
+        <div class="room-toolbar-actions">
+          <span>给{{ name }}的隐藏后记</span>
+          <button class="room-music" type="button" :aria-label="musicPlaying ? '暂停背景音乐' : '播放背景音乐'" :aria-pressed="musicPlaying" :title="musicPlaying ? '暂停背景音乐' : '播放背景音乐'" @click="toggleMusic">
+            <span aria-hidden="true">♫</span><i v-if="!musicPlaying" aria-hidden="true"></i>
+          </button>
+        </div>
       </nav>
 
       <header class="room-heading">
@@ -195,7 +265,6 @@ function onKeydown(event) {
 
           <template v-else-if="active === 'diary'">
             <header class="room-diary-heading">
-              <span class="room-note-eyebrow">把平凡的一天，也留给你</span>
               <h2 id="room-note-title">我的碎碎念</h2>
             </header>
             <div class="room-diary-reading"><DailyNotes /></div>
@@ -212,6 +281,8 @@ function onKeydown(event) {
 .secret-room{position:absolute;inset:0;z-index:2;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:24px 24px max(30px,calc(env(safe-area-inset-bottom) + 20px));background:radial-gradient(ellipse at 50% 40%,#27304980,transparent 65%),linear-gradient(160deg,#131c32,#090f21 76%);color:#f3e7d1;touch-action:pan-y}
 .room-layout{width:min(100%,940px);margin:0 auto}
 .room-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:44px;color:#aab3c4;font-size:13px}
+.room-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0}.room-toolbar-actions>span{text-align:right;line-height:1.6}
+.room-music{position:relative;display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;padding:0;border:1px solid #d6b78440;border-radius:50%;background:#172137aa;color:#e6d3ae;font:inherit;font-size:20px;line-height:1;touch-action:manipulation}.room-music:hover{background:#263047;color:#fff1d1}.room-music:focus-visible{outline:2px solid #f5d79c;outline-offset:3px}.room-music i{position:absolute;width:25px;height:1.5px;border-radius:2px;background:currentColor;transform:rotate(-45deg);pointer-events:none}
 .room-back{display:inline-flex;align-items:center;gap:8px;min-height:44px;color:#e6d3ae;font-size:14px;text-decoration:none;white-space:nowrap}
 .room-back svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.2}
 .room-back:hover{color:#fff1d1}
@@ -288,7 +359,7 @@ function onKeydown(event) {
 .room-page-controls>span{color:#9b7e61;font-size:13px;font-variant-numeric:tabular-nums}
 .room-promise-hint{margin:15px 0 0;color:#9a8067;font-size:13px;line-height:1.8}
 .room-note-diary{display:flex;flex-direction:column;width:min(100%,680px);overflow:hidden;padding:30px 26px 10px;text-align:left}
-.room-diary-heading{flex-shrink:0;padding-right:20px}.room-diary-heading h2{margin-bottom:14px}
+.room-diary-heading{flex-shrink:0;padding-right:20px}.room-note-diary .room-diary-heading h2{margin:0 0 16px;font-size:22px;line-height:1.5;letter-spacing:.05em}
 .room-diary-reading{min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:0 5px 10px;scrollbar-width:thin}
 .room-note-diary>.room-put-back{flex-shrink:0;margin-top:3px}
 .room-inspect-enter-active,.room-inspect-leave-active{transition:opacity .25s}
@@ -305,7 +376,7 @@ function onKeydown(event) {
 @keyframes roomShootingStar{0%,80%,100%{opacity:0;transform:translate(0,0)}82%{opacity:.7}92%{opacity:0;transform:translate(280px,110px)}}
 @media(max-width:600px){
   .secret-room{padding:16px 18px max(28px,calc(env(safe-area-inset-bottom) + 18px))}
-  .room-toolbar{gap:10px}.room-toolbar>span{max-width:12em;text-align:right;font-size:12px;line-height:1.6}
+  .room-toolbar{gap:10px}.room-toolbar-actions{gap:8px}.room-toolbar-actions>span{max-width:12em;font-size:12px}
   .room-heading{margin:25px 0 24px}.room-heading h1{font-size:32px}
   .room-scene{height:410px;border-radius:80px 80px 20px 20px}
   .room-window{left:9%;width:47%;border-width:6px}.room-window-sill{left:7%;width:51%}
